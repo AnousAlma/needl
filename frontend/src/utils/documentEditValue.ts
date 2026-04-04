@@ -154,6 +154,14 @@ export function validateNewFieldName(name: string, existingKeys: string[]): stri
   return null;
 }
 
+/** Key name for a new nested object property in compact edit (`newField`, `newField_1`, …). */
+export function uniqueNestedObjectKey(existingKeys: string[], base = 'newField'): string {
+  if (!existingKeys.includes(base)) return base;
+  let n = 1;
+  while (existingKeys.includes(`${base}_${n}`)) n += 1;
+  return `${base}_${n}`;
+}
+
 export function valueToEditableString(value: unknown): string {
   if (value === undefined) return '';
   if (typeof value === 'string') return JSON.stringify(value);
@@ -189,6 +197,28 @@ export function sortedDocumentKeys(doc: Record<string, unknown>): string[] {
     return a.localeCompare(b);
   });
   return keys;
+}
+
+/** EJSON one-key scalars — keep as a single compact field, not expanded rows. */
+export function isBsonScalarWrapper(v: unknown): boolean {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return false;
+  const o = v as Record<string, unknown>;
+  const keys = Object.keys(o);
+  if (keys.length !== 1) return false;
+  const k = keys[0]!;
+  if (k === '$oid' && typeof o.$oid === 'string') return true;
+  if (k === '$date' && (typeof o.$date === 'string' || typeof o.$date === 'number')) return true;
+  if ((k === '$numberInt' || k === '$numberLong') && typeof o[k] === 'string') return true;
+  if (k === '$numberDouble' && (typeof o.$numberDouble === 'string' || typeof o.$numberDouble === 'number'))
+    return true;
+  return false;
+}
+
+/** True when compact edit should show nested rows (array items or object properties). */
+export function shouldExpandCompactValue(v: unknown): boolean {
+  if (Array.isArray(v)) return true;
+  if (v !== null && typeof v === 'object' && !isBsonScalarWrapper(v)) return true;
+  return false;
 }
 
 export function buildDocumentFromFieldTexts(

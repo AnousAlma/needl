@@ -6,6 +6,7 @@ import {
   driverReplaceOne,
   getConnectionMongoUri,
 } from '../api/driverApi';
+import { CompactValueEditor } from '../components/CompactValueEditor';
 import { DocumentFieldKindModal } from '../components/DocumentFieldKindModal';
 import { useAuth } from '../contexts/AuthContext';
 import type { DocumentViewMode } from '../store/settingsStore';
@@ -658,57 +659,49 @@ export function DocumentEditScreen({ navigation, route }: Props) {
               const readOnly = key === '_id';
               return (
                 <View key={key} style={[styles.compactRow, { borderBottomColor: colors.border }]}>
-                  <Text style={[styles.fieldName, { color: colors.text }]} numberOfLines={1}>
-                    {key}
-                    <Text style={{ color: colors.syntaxPunctuation }}>:</Text>
-                  </Text>
-                  <TextInput
-                    value={
-                      readOnly && editMode === 'compact'
-                        ? (compactObjectIdFieldDisplayFromText(fieldTexts[key] ?? '') ??
-                            (fieldTexts[key] ?? ''))
-                        : (fieldTexts[key] ?? '')
-                    }
-                    editable={!readOnly}
-                    onChangeText={(t) => updateField(key, t)}
-                    multiline
-                    scrollEnabled={false}
-                    textAlignVertical="top"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    style={[
-                      styles.compactInput,
-                      {
-                        color: readOnly ? colors.textMuted : colors.text,
-                        fontFamily: monoFontFamily,
-                      },
-                    ]}
-                  />
-                  {!readOnly ? (
-                    <View style={styles.rowActions}>
-                      <Pressable
-                        onPress={() => setKindModal({ mode: 'type', key })}
-                        hitSlop={6}
-                        style={[styles.miniAct, { borderColor: colors.border }]}
-                        accessibilityLabel={`Change type (${fieldTypeGlyph(fieldTexts[key] ?? '')}) for ${key}`}
-                      >
-                        <Text
-                          style={[styles.typeGlyph, { color: colors.primary, fontFamily: monoFontFamily }]}
-                          numberOfLines={1}
+                  <View style={styles.compactRowHeader}>
+                    <Text style={[styles.fieldName, { color: colors.text }]} numberOfLines={1}>
+                      {key}
+                      <Text style={{ color: colors.syntaxPunctuation }}>:</Text>
+                    </Text>
+                    {!readOnly ? (
+                      <View style={styles.rowActions}>
+                        <Pressable
+                          onPress={() => setKindModal({ mode: 'type', key })}
+                          hitSlop={6}
+                          style={[styles.miniAct, { borderColor: colors.border }]}
+                          accessibilityLabel={`Change type (${fieldTypeGlyph(fieldTexts[key] ?? '')}) for ${key}`}
                         >
-                          {fieldTypeGlyph(fieldTexts[key] ?? '')}
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => confirmDeleteField(key)}
-                        hitSlop={6}
-                        style={[styles.miniAct, { borderColor: colors.border }]}
-                        accessibilityLabel={`Delete ${key}`}
-                      >
-                        <Trash2 size={18} color={colors.danger} />
-                      </Pressable>
-                    </View>
-                  ) : null}
+                          <Text
+                            style={[styles.typeGlyph, { color: colors.primary, fontFamily: monoFontFamily }]}
+                            numberOfLines={1}
+                          >
+                            {fieldTypeGlyph(fieldTexts[key] ?? '')}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => confirmDeleteField(key)}
+                          hitSlop={6}
+                          style={[styles.miniAct, { borderColor: colors.border }]}
+                          accessibilityLabel={`Delete ${key}`}
+                        >
+                          <Trash2 size={18} color={colors.danger} />
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </View>
+                  <View style={styles.compactValueWrap}>
+                    <CompactValueEditor
+                      value={parseEditableString(fieldTexts[key] ?? '')}
+                      readOnly={readOnly}
+                      onChange={(next) => {
+                        if (readOnly) return;
+                        updateField(key, valueToEditableString(next));
+                      }}
+                      colors={colors}
+                      monoFontFamily={monoFontFamily}
+                    />
+                  </View>
                 </View>
               );
             })}
@@ -894,25 +887,28 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   compactRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    paddingVertical: 10,
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  compactRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   fieldName: {
     fontSize: 14,
     fontWeight: '700',
-    minWidth: 88,
-    paddingTop: 8,
+    flexShrink: 1,
+    minWidth: 0,
   },
-  compactInput: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 20,
-    minHeight: 40,
-    paddingVertical: 6,
+  compactValueWrap: {
+    alignSelf: 'stretch',
+    width: '100%',
   },
   hScroll: {
     marginHorizontal: -16,

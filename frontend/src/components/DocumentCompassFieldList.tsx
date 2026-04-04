@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ThemeColors } from '../theme/colors';
 import {
+  bsonTypeLabel,
   colorForBsonKind,
   fieldSummaryIsExpandable,
   formatBsonFieldLine,
@@ -63,41 +64,76 @@ function DocumentCompassFieldListInner({
         const rowPath = pathKey([...pathSegments, row.pathSegment]);
         const expandable = fieldSummaryIsExpandable(row.text, row.value);
         const isOpen = expandedPaths.has(rowPath);
+        const typeLabel = bsonTypeLabel(row.value, row.pathSegment);
+
+        const fieldLabel = (
+          <Text style={[styles.fieldName, { color: colors.text }]} selectable={false} numberOfLines={1}>
+            {row.label}
+            <Text style={{ color: colors.syntaxPunctuation }}>:</Text>
+          </Text>
+        );
+
+        const typeChip =
+          !expandable && typeLabel !== 'Mixed' ? (
+            <View style={[styles.typeChip, { backgroundColor: colors.inputSurface, borderColor: colors.border }]}>
+              <Text style={[styles.typeChipText, { color: colors.textMuted, fontFamily: monoFontFamily }]}>
+                {typeLabel}
+              </Text>
+            </View>
+          ) : null;
+
+        const valueBlock = expandable ? (
+          <Text
+            style={[mono, { color: colorForBsonKind(row.kind, colors), flex: 1, minWidth: 0 }]}
+            selectable={false}
+          >
+            {row.text}
+          </Text>
+        ) : (
+          <Text style={[mono, { color: colorForBsonKind(row.kind, colors), flex: 1, minWidth: 0 }]} selectable>
+            {row.text}
+          </Text>
+        );
+
+        const valueSlot = (
+          <View style={styles.valueSlot}>
+            {valueBlock}
+            {typeChip}
+          </View>
+        );
+
+        const rowInner = expandable ? (
+          <Pressable
+            onPress={() => onTogglePath(rowPath)}
+            style={({ pressed }) => [
+              styles.rowMain,
+              embedded && styles.rowEmbedded,
+              { borderBottomColor: colors.border, opacity: pressed ? 0.75 : 1 },
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: isOpen }}
+          >
+            <Text style={[styles.caret, { color: colors.textMuted }]} selectable={false}>
+              {isOpen ? '▾' : '▸'}
+            </Text>
+            {fieldLabel}
+            {valueSlot}
+          </Pressable>
+        ) : (
+          <View
+            style={[styles.rowMain, embedded && styles.rowEmbedded, { borderBottomColor: colors.border }]}
+          >
+            <Text style={[styles.caret, { color: 'transparent' }]} selectable={false}>
+              ▸
+            </Text>
+            {fieldLabel}
+            {valueSlot}
+          </View>
+        );
 
         return (
           <View key={row.reactKey}>
-            <View
-              style={[styles.row, embedded && styles.rowEmbedded, { borderBottomColor: colors.border }]}
-            >
-              <Text style={[styles.fieldName, { color: colors.text }]} selectable>
-                {row.label}
-                <Text style={{ color: colors.syntaxPunctuation }}>:</Text>
-              </Text>
-              {expandable ? (
-                <Pressable
-                  onPress={() => onTogglePath(rowPath)}
-                  hitSlop={6}
-                  style={styles.valuePressable}
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: isOpen }}
-                >
-                  <Text
-                    style={[mono, { color: colorForBsonKind(row.kind, colors), flex: 1 }]}
-                    selectable={false}
-                  >
-                    {isOpen ? '▾ ' : ''}
-                    {row.text}
-                  </Text>
-                </Pressable>
-              ) : (
-                <Text
-                  style={[mono, { color: colorForBsonKind(row.kind, colors), flex: 1 }]}
-                  selectable
-                >
-                  {row.text}
-                </Text>
-              )}
-            </View>
+            {rowInner}
             {expandable && isOpen && row.value !== null && typeof row.value === 'object' ? (
               <View style={[styles.nested, { borderLeftColor: colors.border }]}>
                 <DocumentCompassFieldListInner
@@ -118,7 +154,7 @@ function DocumentCompassFieldListInner({
   );
 }
 
-/** Compass-style vertical field list (one row per key, like MongoDB “List” document view). */
+/** Compass-style vertical field list: caret, key, type chip, value; nested arrays/objects indented. */
 export function DocumentCompassFieldList({
   doc,
   colors,
@@ -157,29 +193,56 @@ const styles = StyleSheet.create({
   wrap: {
     alignSelf: 'stretch',
   },
-  row: {
+  rowMain: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
     paddingVertical: 10,
+    paddingRight: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rowEmbedded: {
     paddingVertical: 6,
   },
+  caret: {
+    width: 18,
+    fontSize: 11,
+    lineHeight: 20,
+    paddingTop: 1,
+    textAlign: 'center',
+  },
   fieldName: {
     fontSize: 14,
     fontWeight: '700',
-    minWidth: 88,
+    minWidth: 56,
+    maxWidth: '40%',
+    flexShrink: 1,
     paddingTop: 1,
   },
-  valuePressable: {
+  typeChip: {
+    alignSelf: 'flex-start',
+    marginTop: 1,
+    marginLeft: 8,
+    flexShrink: 0,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  typeChipText: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'none',
+  },
+  valueSlot: {
     flex: 1,
     minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
   nested: {
-    marginLeft: 8,
-    paddingLeft: 8,
+    marginLeft: 10,
+    paddingLeft: 10,
     borderLeftWidth: StyleSheet.hairlineWidth,
     marginBottom: 4,
   },

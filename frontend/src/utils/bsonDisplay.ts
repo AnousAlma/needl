@@ -62,7 +62,7 @@ export function formatBsonCellText(
     };
   }
   if (Array.isArray(value)) {
-    const t = `[${value.length} items]`;
+    const t = `Array (${value.length})`;
     return { text: t.length > maxLen ? `${t.slice(0, maxLen - 1)}…` : t, kind: 'other' };
   }
   if (typeof value === 'object') {
@@ -101,7 +101,7 @@ export function formatBsonCellText(
 }
 
 /**
- * One-line value for Compass-style compact field list: plain objects collapse to `{...}`
+ * One-line value for Compass-style compact field list: plain objects collapse to `Object`
  * so huge nested maps do not flood the card (BSON extended types stay expanded).
  */
 /** True for Mongo extended JSON shapes that should render as a single scalar line (not `{...}`). */
@@ -122,11 +122,11 @@ export function isCollapsibleNestedValue(value: unknown): boolean {
   return !isBsonExtendedScalarObject(value);
 }
 
-/** Matches compact field-line placeholders `{...}` or `[n items]`. */
+/** Matches compact field-line summaries for nested object/array (Compass-style). */
 export function fieldSummaryIsExpandable(text: string, value: unknown): boolean {
   if (!isCollapsibleNestedValue(value)) return false;
-  if (text === '{...}') return true;
-  return /^\[\d+ items\]$/.test(text);
+  if (text === '{...}' || text === 'Object') return true;
+  return /^Array \(\d+\)$/.test(text) || /^\[\d+ items\]$/.test(text);
 }
 
 export function formatBsonFieldLine(value: unknown, fieldKey?: string): { text: string; kind: BsonColorKind } {
@@ -136,7 +136,7 @@ export function formatBsonFieldLine(value: unknown, fieldKey?: string): { text: 
     return { text: `ObjectId('${value}')`, kind: 'objectId' };
   }
   if (Array.isArray(value)) {
-    return { text: `[${value.length} items]`, kind: 'other' };
+    return { text: `Array (${value.length})`, kind: 'other' };
   }
   if (typeof value === 'object') {
     const o = value as Record<string, unknown>;
@@ -155,7 +155,7 @@ export function formatBsonFieldLine(value: unknown, fieldKey?: string): { text: 
     ) {
       return formatBsonCellText(value, 8000, fieldKey);
     }
-    return { text: '{...}', kind: 'other' };
+    return { text: 'Object', kind: 'other' };
   }
   if (typeof value === 'string') {
     return { text: JSON.stringify(value), kind: 'string' };

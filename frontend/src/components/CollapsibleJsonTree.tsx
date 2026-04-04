@@ -199,7 +199,7 @@ function JsonArrayBlock({
   const pad = depth * INDENT;
   const pc = punctColor(tree.colors, tree.colorOverrides);
   const base = monoBase(tree.monoFontFamily);
-  const summary = `[${arr.length} items]`;
+  const summary = `Array (${arr.length})`;
 
   if (!isRoot && !expanded) {
     return (
@@ -302,7 +302,7 @@ function JsonValueNode({
 }
 
 /**
- * Pretty JSON with nested objects/arrays collapsed to `{...}` / `[n items]`; tap to expand/collapse.
+ * Pretty JSON with nested objects/arrays collapsed to `{...}` / `Array (n)`; tap to expand/collapse.
  * Root document is always expanded one level (keys visible).
  */
 export function CollapsibleJsonTree({
