@@ -43,20 +43,20 @@ import {
   saveCurrentQuery,
   type SavedExplorerQuery,
 } from '../storage/savedQueryStorage';
-import type { ThemeColors } from '../theme/colors';
+import type { ColorSchemeName, ThemeColors } from '../theme/colors';
 import type { RootStackScreenProps } from '../types/navigation';
 import { useTheme } from '../theme/ThemeProvider';
 
 type Props = RootStackScreenProps<'DocumentExplorer'>;
 
-/** Stitch / HTML reference — Document Explorer dark theme (app background = colors.background in dark mode) */
-const EXPLORER_SURFACE = '#323532';
-const EXPLORER_TEXT = '#F9FBFA';
-const EXPLORER_MUTED = '#889397';
-const EXPLORER_BORDER = 'rgba(136, 147, 151, 0.22)';
-const EXPLORER_GLASS = 'rgba(34, 36, 33, 0.92)';
+/** Dark-only: Compass-style explorer chrome on top of #222421 canvas */
+const EXPLORER_SURFACE_DARK = '#323532';
+const EXPLORER_TEXT_DARK = '#F9FBFA';
+const EXPLORER_MUTED_DARK = '#889397';
+const EXPLORER_BORDER_DARK = 'rgba(136, 147, 151, 0.22)';
+const EXPLORER_GLASS_DARK = 'rgba(34, 36, 33, 0.92)';
 
-const EXPLORER_JSON_SYNTAX: JsonSyntaxColorOverrides = {
+const EXPLORER_JSON_SYNTAX_DARK: JsonSyntaxColorOverrides = {
   keyString: '#889397',
   valueString: '#00ED64',
   number: '#FF6F44',
@@ -64,8 +64,39 @@ const EXPLORER_JSON_SYNTAX: JsonSyntaxColorOverrides = {
   null: '#889397',
   punct: '#889397',
   space: '#889397',
-  other: EXPLORER_TEXT,
+  other: EXPLORER_TEXT_DARK,
 };
+
+type ExplorerChrome = {
+  surface: string;
+  text: string;
+  muted: string;
+  border: string;
+  /** Outer search strip behind the query field */
+  glass: string;
+  jsonSyntax: JsonSyntaxColorOverrides | undefined;
+};
+
+function explorerChromeFor(scheme: ColorSchemeName, colors: ThemeColors): ExplorerChrome {
+  if (scheme === 'dark') {
+    return {
+      surface: EXPLORER_SURFACE_DARK,
+      text: EXPLORER_TEXT_DARK,
+      muted: EXPLORER_MUTED_DARK,
+      border: EXPLORER_BORDER_DARK,
+      glass: EXPLORER_GLASS_DARK,
+      jsonSyntax: EXPLORER_JSON_SYNTAX_DARK,
+    };
+  }
+  return {
+    surface: colors.surface,
+    text: colors.text,
+    muted: colors.textMuted,
+    border: colors.border,
+    glass: colors.background,
+    jsonSyntax: undefined,
+  };
+}
 
 function formatIdSnippet(doc: unknown): string | null {
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return null;
@@ -103,11 +134,15 @@ function DocumentPreviewCard({
   colors,
   monoFontFamily,
   onPress,
+  chrome,
+  jsonSyntax,
 }: {
   doc: unknown;
   colors: ThemeColors;
   monoFontFamily: string;
   onPress: () => void;
+  chrome: Pick<ExplorerChrome, 'surface' | 'border' | 'muted'>;
+  jsonSyntax: JsonSyntaxColorOverrides | undefined;
 }) {
   const idLabel = formatIdSnippet(doc);
 
@@ -117,13 +152,13 @@ function DocumentPreviewCard({
       style={({ pressed }) => [
         styles.docCard,
         {
-          backgroundColor: EXPLORER_SURFACE,
-          borderColor: pressed ? 'rgba(0, 237, 100, 0.45)' : EXPLORER_BORDER,
+          backgroundColor: chrome.surface,
+          borderColor: pressed ? 'rgba(0, 237, 100, 0.45)' : chrome.border,
         },
       ]}
     >
       {idLabel ? (
-        <Text style={[styles.docCardId, { color: EXPLORER_MUTED }]} numberOfLines={1}>
+        <Text style={[styles.docCardId, { color: chrome.muted }]} numberOfLines={1}>
           {idLabel}
         </Text>
       ) : null}
@@ -131,7 +166,7 @@ function DocumentPreviewCard({
         value={doc}
         colors={colors}
         monoFontFamily={monoFontFamily}
-        colorOverrides={EXPLORER_JSON_SYNTAX}
+        colorOverrides={jsonSyntax}
       />
     </Pressable>
   );
@@ -143,11 +178,13 @@ function CompactExplorerCard({
   colors,
   monoFontFamily,
   onPress,
+  chrome,
 }: {
   doc: unknown;
   colors: ThemeColors;
   monoFontFamily: string;
   onPress: () => void;
+  chrome: Pick<ExplorerChrome, 'surface' | 'border' | 'muted'>;
 }) {
   const idLabel = formatIdSnippet(doc);
   return (
@@ -156,13 +193,13 @@ function CompactExplorerCard({
       style={({ pressed }) => [
         styles.compactCard,
         {
-          backgroundColor: EXPLORER_SURFACE,
-          borderColor: pressed ? 'rgba(0, 237, 100, 0.45)' : EXPLORER_BORDER,
+          backgroundColor: chrome.surface,
+          borderColor: pressed ? 'rgba(0, 237, 100, 0.45)' : chrome.border,
         },
       ]}
     >
       {idLabel ? (
-        <Text style={[styles.compactCardId, { color: EXPLORER_MUTED }]} numberOfLines={1}>
+        <Text style={[styles.compactCardId, { color: chrome.muted }]} numberOfLines={1}>
           {idLabel}
         </Text>
       ) : null}
@@ -203,7 +240,8 @@ function docKey(doc: unknown, index: number): string {
 
 export function DocumentExplorerScreen({ navigation, route }: Props) {
   const theme = useTheme();
-  const { colors, typography: typo, monoFontFamily } = theme;
+  const { colors, scheme, typography: typo, monoFontFamily } = theme;
+  const ex = useMemo(() => explorerChromeFor(scheme, colors), [scheme, colors]);
   const documentViewMode = useSettingsStore((s) => s.documentViewMode);
   const pageSize = useSettingsStore((s) => s.pageSize);
   const sortPreset = useSettingsStore((s) => s.sortPreset);
@@ -231,18 +269,20 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
   const mongoUri = getConnectionMongoUri(connection);
   const useDriver = canBrowseWithDriver(connection, Boolean(user));
 
-  /** Theme overrides so field/table text reads on explorer dark surfaces. */
-  const explorerFieldColors = useMemo(
-    (): ThemeColors => ({
-      ...colors,
-      text: EXPLORER_TEXT,
-      textMuted: EXPLORER_MUTED,
-      border: EXPLORER_BORDER,
-      surface: EXPLORER_SURFACE,
-      inputSurface: EXPLORER_SURFACE,
-    }),
-    [colors],
-  );
+  /** Dark: lift contrast on charcoal cards. Light: use global theme as-is. */
+  const explorerFieldColors = useMemo((): ThemeColors => {
+    if (scheme === 'dark') {
+      return {
+        ...colors,
+        text: EXPLORER_TEXT_DARK,
+        textMuted: EXPLORER_MUTED_DARK,
+        border: EXPLORER_BORDER_DARK,
+        surface: EXPLORER_SURFACE_DARK,
+        inputSurface: EXPLORER_SURFACE_DARK,
+      };
+    }
+    return colors;
+  }, [scheme, colors]);
 
   const effectiveFilter = useMemo(
     () => mergeQueryFilters(filterText, builderClauses),
@@ -443,9 +483,9 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
       title: collectionName,
       headerStyle: { backgroundColor: colors.background },
       headerShadowVisible: false,
-      headerTintColor: EXPLORER_TEXT,
+      headerTintColor: colors.text,
       headerTitleStyle: {
-        color: EXPLORER_TEXT,
+        color: colors.text,
         fontWeight: '700',
         fontSize: 18,
       },
@@ -464,7 +504,16 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
             )
           : undefined,
     });
-  }, [navigation, collectionName, canAddDocument, loading, addNewDocument, colors.primary, colors.background]);
+  }, [
+    navigation,
+    collectionName,
+    canAddDocument,
+    loading,
+    addNewDocument,
+    colors.primary,
+    colors.background,
+    colors.text,
+  ]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -533,19 +582,19 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
 
   const isTable = documentViewMode === 'list';
 
-  const searchBorderColor = searchFocused ? 'rgba(0, 237, 100, 0.45)' : EXPLORER_BORDER;
+  const searchBorderColor = searchFocused ? 'rgba(0, 237, 100, 0.45)' : ex.border;
 
   const filterBlock = (
     <>
-      <View style={[styles.searchChrome, { backgroundColor: EXPLORER_GLASS, borderBottomColor: EXPLORER_BORDER }]}>
-        <View style={[styles.searchInner, { backgroundColor: EXPLORER_SURFACE, borderColor: searchBorderColor }]}>
+      <View style={[styles.searchChrome, { backgroundColor: ex.glass, borderBottomColor: ex.border }]}>
+        <View style={[styles.searchInner, { backgroundColor: ex.surface, borderColor: searchBorderColor }]}>
           <Pressable
             onPress={() => applyFilter()}
             style={styles.searchIconSlot}
             hitSlop={8}
             accessibilityLabel="Run query"
           >
-            <Search size={22} color={EXPLORER_MUTED} strokeWidth={2} />
+            <Search size={22} color={ex.muted} strokeWidth={2} />
           </Pressable>
           <Pressable
             onPress={() => {
@@ -572,7 +621,7 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
             accessibilityLabel="Saved queries"
             style={styles.searchIconSlot}
           >
-            <History size={20} color={EXPLORER_MUTED} strokeWidth={2} />
+            <History size={20} color={ex.muted} strokeWidth={2} />
           </Pressable>
           <TextInput
             value={filterText}
@@ -581,10 +630,10 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
             placeholder={'{"role": "admin"}'}
-            placeholderTextColor={EXPLORER_MUTED}
+            placeholderTextColor={ex.muted}
             autoCapitalize="none"
             autoCorrect={false}
-            style={[styles.searchInput, { color: EXPLORER_TEXT, fontFamily: monoFontFamily }]}
+            style={[styles.searchInput, { color: ex.text, fontFamily: monoFontFamily }]}
           />
           {filterText.length > 0 || builderClauses.length > 0 ? (
             <Pressable
@@ -597,7 +646,7 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
               hitSlop={8}
               accessibilityLabel="Clear query"
             >
-              <X size={22} color={EXPLORER_MUTED} strokeWidth={2} />
+              <X size={22} color={ex.muted} strokeWidth={2} />
             </Pressable>
           ) : null}
         </View>
@@ -613,10 +662,10 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
           {builderClauses.map((c, i) => (
             <View
               key={`builder-clause-${i}`}
-              style={[styles.chip, { backgroundColor: EXPLORER_SURFACE, borderColor: EXPLORER_BORDER }]}
+              style={[styles.chip, { backgroundColor: ex.surface, borderColor: ex.border }]}
             >
               <Text
-                style={[typo.caption, { color: EXPLORER_TEXT, fontFamily: monoFontFamily, maxWidth: 200 }]}
+                style={[typo.caption, { color: ex.text, fontFamily: monoFontFamily, maxWidth: 200 }]}
                 numberOfLines={1}
               >
                 {clauseSummary(c)}
@@ -627,7 +676,7 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
                 accessibilityLabel="Remove filter"
                 style={styles.chipClose}
               >
-                <X size={16} color={EXPLORER_MUTED} />
+                <X size={16} color={ex.muted} />
               </Pressable>
             </View>
           ))}
@@ -635,13 +684,13 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
       ) : null}
 
       {!effectiveFilter.ok ? (
-        <Text style={[typo.caption, { color: '#FF6F44', paddingHorizontal: 16, marginTop: 8 }]}>
+        <Text style={[typo.caption, { color: colors.danger, paddingHorizontal: 16, marginTop: 8 }]}>
           {effectiveFilter.message}
         </Text>
       ) : null}
 
       {error ? (
-        <Text style={[typo.caption, { color: '#FF6F44', paddingHorizontal: 16, marginBottom: 8 }]}>{error}</Text>
+        <Text style={[typo.caption, { color: colors.danger, paddingHorizontal: 16, marginBottom: 8 }]}>{error}</Text>
       ) : null}
 
       <AddFilterModal
@@ -665,7 +714,7 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
 
   const emptyMessage =
     !error && effectiveFilter.ok ? (
-      <Text style={[typo.body, { color: EXPLORER_MUTED, textAlign: 'center', marginTop: 40, paddingHorizontal: 24 }]}>
+      <Text style={[typo.body, { color: ex.muted, textAlign: 'center', marginTop: 40, paddingHorizontal: 24 }]}>
         No documents (or rules blocked reads).
       </Text>
     ) : null;
@@ -697,8 +746,8 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
                 style={({ pressed }) => [
                   styles.loadMoreBtn,
                   {
-                    borderColor: EXPLORER_BORDER,
-                    backgroundColor: EXPLORER_SURFACE,
+                    borderColor: ex.border,
+                    backgroundColor: ex.surface,
                     opacity: pressed ? 0.9 : loadingMore ? 0.6 : 1,
                   },
                 ]}
@@ -722,7 +771,7 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
       <FlatList
         data={documents}
         keyExtractor={(item, index) => docKey(item, index)}
-        extraData={documentViewMode}
+        extraData={`${documentViewMode}-${scheme}`}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
@@ -742,6 +791,8 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
               colors={colors}
               monoFontFamily={monoFontFamily}
               onPress={() => openDocumentEdit(item)}
+              chrome={ex}
+              jsonSyntax={ex.jsonSyntax}
             />
           ) : (
             <CompactExplorerCard
@@ -749,6 +800,7 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
               colors={explorerFieldColors}
               monoFontFamily={monoFontFamily}
               onPress={() => openDocumentEdit(item)}
+              chrome={ex}
             />
           )
         }
