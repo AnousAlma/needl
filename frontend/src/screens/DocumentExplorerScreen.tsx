@@ -18,7 +18,7 @@ import {
 } from '../store/settingsStore';
 import { CollapsibleJsonTree } from '../components/CollapsibleJsonTree';
 import type { JsonSyntaxColorOverrides } from '../utils/jsonSyntax';
-import { clauseSummary, mergeQueryFilters } from '../utils/queryFilterBuilder';
+import { clauseSummary, parseFilterJson } from '../utils/queryFilterBuilder';
 import * as Haptics from 'expo-haptics';
 import { History, ListFilter, Plus, Search, X } from 'lucide-react-native';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -46,6 +46,7 @@ import {
 import type { ColorSchemeName, ThemeColors } from '../theme/colors';
 import type { RootStackScreenProps } from '../types/navigation';
 import { useTheme } from '../theme/ThemeProvider';
+import { unionDocumentKeys } from '../utils/bsonDisplay';
 
 type Props = RootStackScreenProps<'DocumentExplorer'>;
 
@@ -227,6 +228,23 @@ function safeStringify(doc: unknown): string {
   }
 }
 
+function escapeRegexLiteral(raw: string): string {
+  return raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function mergeBaseAndClauses(
+  base: Record<string, unknown>,
+  builderClauses: Record<string, unknown>[],
+): { ok: true; filter: Record<string, unknown> } {
+  const parts: Record<string, unknown>[] = [];
+  if (Object.keys(base).length > 0) parts.push(base);
+  const cleanClauses = builderClauses.filter((c) => c && typeof c === 'object' && Object.keys(c).length > 0);
+  parts.push(...cleanClauses);
+  if (parts.length === 0) return { ok: true, filter: {} };
+  if (parts.length === 1) return { ok: true, filter: parts[0]! };
+  return { ok: true, filter: { $and: parts } };
+}
+
 function docKey(doc: unknown, index: number): string {
   if (doc && typeof doc === 'object' && '_id' in doc) {
     try {
@@ -284,10 +302,25 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
     return colors;
   }, [scheme, colors]);
 
-  const effectiveFilter = useMemo(
-    () => mergeQueryFilters(filterText, builderClauses),
-    [filterText, builderClauses],
+  const parsedTextFilter = useMemo(() => parseFilterJson(filterText), [filterText]);
+  const textSearchMode = useMemo(
+    () => !parsedTextFilter.ok && filterText.trim().length > 0,
+    [parsedTextFilter.ok, filterText],
   );
+  const effectiveFilter = useMemo(() => {
+    if (parsedTextFilter.ok) {
+      return mergeBaseAndClauses(parsedTextFilter.filter, builderClauses);
+    }
+    const term = filterText.trim();
+    if (!term) return mergeBaseAndClauses({}, builderClauses);
+    const keys = unionDocumentKeys(documents).filter((k) => k !== '_id');
+    if (keys.length === 0) return mergeBaseAndClauses({}, builderClauses);
+    const escaped = escapeRegexLiteral(term);
+    const regexAnyKnownField: Record<string, unknown> = {
+      $or: keys.map((k) => ({ [k]: { $regex: escaped, $options: 'i' } })),
+    };
+    return mergeBaseAndClauses(regexAnyKnownField, builderClauses);
+  }, [parsedTextFilter, filterText, builderClauses, documents]);
 
   useLayoutEffect(() => {
     void (async () => {
@@ -361,13 +394,21 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
 
   const load = useCallback(
     async (override?: { text: string; clauses: Record<string, unknown>[] }) => {
-      const merged = mergeQueryFilters(override?.text ?? filterText, override?.clauses ?? builderClauses);
-      if (!merged.ok) {
-        setError(null);
-        setDocuments([]);
-        setHasMore(false);
-        return;
-      }
+      const nextText = override?.text ?? filterText;
+      const nextClauses = override?.clauses ?? builderClauses;
+      const parsed = parseFilterJson(nextText);
+      const merged = parsed.ok
+        ? mergeBaseAndClauses(parsed.filter, nextClauses)
+        : (() => {
+            const term = nextText.trim();
+            const keys = unionDocumentKeys(documents).filter((k) => k !== '_id');
+            if (!term || keys.length === 0) return mergeBaseAndClauses({}, nextClauses);
+            const escaped = escapeRegexLiteral(term);
+            const regexAnyKnownField: Record<string, unknown> = {
+              $or: keys.map((k) => ({ [k]: { $regex: escaped, $options: 'i' } })),
+            };
+            return mergeBaseAndClauses(regexAnyKnownField, nextClauses);
+          })();
 
       const result = await fetchDocumentsPage(0, merged.filter);
       if (!result.ok) {
@@ -381,7 +422,7 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
       setDocuments(result.docs);
       setHasMore(result.docs.length === pageSize);
     },
-    [filterText, builderClauses, fetchDocumentsPage, pageSize],
+    [filterText, builderClauses, fetchDocumentsPage, pageSize, documents],
   );
 
   const loadMore = useCallback(async () => {
@@ -413,6 +454,15 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (refreshAfterEdit != null) void load();
   }, [refreshAfterEdit, load]);
+
+  /** Auto-run query after a short pause so search behaves like live filtering. */
+  useEffect(() => {
+    if (loading) return;
+    const t = setTimeout(() => {
+      void load();
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [loading, parsedTextFilter.ok, filterText, builderClauses, load]);
 
   const openDocumentEdit = useCallback(
     (doc: unknown) => {
@@ -683,9 +733,9 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
         </ScrollView>
       ) : null}
 
-      {!effectiveFilter.ok ? (
-        <Text style={[typo.caption, { color: colors.danger, paddingHorizontal: 16, marginTop: 8 }]}>
-          {effectiveFilter.message}
+      {textSearchMode ? (
+        <Text style={[typo.caption, { color: ex.muted, paddingHorizontal: 16, marginTop: 8 }]}>
+          Text search mode: running regex across known fields for "{filterText.trim()}".
         </Text>
       ) : null}
 
@@ -713,7 +763,7 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
   );
 
   const emptyMessage =
-    !error && effectiveFilter.ok ? (
+    !error && (effectiveFilter.ok || textSearchMode) ? (
       <Text style={[typo.body, { color: ex.muted, textAlign: 'center', marginTop: 40, paddingHorizontal: 24 }]}>
         No documents (or rules blocked reads).
       </Text>
