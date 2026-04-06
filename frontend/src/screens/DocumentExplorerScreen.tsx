@@ -26,6 +26,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -683,7 +684,15 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
             placeholderTextColor={ex.muted}
             autoCapitalize="none"
             autoCorrect={false}
-            style={[styles.searchInput, { color: ex.text, fontFamily: monoFontFamily }]}
+            style={[
+              styles.searchInput,
+              {
+                color: ex.text,
+                fontFamily: monoFontFamily,
+                // iOS Safari zooms focused inputs below 16px.
+                fontSize: Platform.OS === 'web' ? 16 : 13,
+              },
+            ]}
           />
           {filterText.length > 0 || builderClauses.length > 0 ? (
             <Pressable

@@ -59,6 +59,17 @@ function ConnectionRow({
   };
 
   const askRemove = () => {
+    if (isWeb) {
+      const ok =
+        typeof window !== 'undefined'
+          ? window.confirm(`Remove "${item.name}" from this device? Saved keys for this connection will be deleted.`)
+          : true;
+      if (!ok) return;
+      void (async () => {
+        await onRemove(item.id);
+      })();
+      return;
+    }
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Alert.alert(
       'Remove connection',
@@ -130,23 +141,6 @@ function ConnectionRow({
           <Text style={[typo.subtitle, { color: colors.text, flex: 1, fontWeight: '700' }]} numberOfLines={1}>
             {item.name}
           </Text>
-          {isWeb ? (
-            <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                askRemove();
-              }}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove ${item.name}`}
-              style={({ pressed }) => [
-                styles.webDeleteBtn,
-                { borderColor: colors.border, opacity: pressed ? 0.75 : 1 },
-              ]}
-            >
-              <Trash2 size={16} color={colors.danger} />
-            </Pressable>
-          ) : null}
         </View>
         {uriLine ? (
           <Text
@@ -181,7 +175,25 @@ function ConnectionRow({
   return (
     <View style={styles.swipeRow}>
       {isWeb ? (
-        card
+        <View style={styles.webCardWrap}>
+          {card}
+          <Pressable
+            onPress={askRemove}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove ${item.name}`}
+            style={({ pressed }) => [
+              styles.webDeleteBtn,
+              {
+                borderColor: colors.border,
+                backgroundColor: colors.surface,
+                opacity: pressed ? 0.75 : 1,
+              },
+            ]}
+          >
+            <Trash2 size={16} color={colors.danger} />
+          </Pressable>
+        </View>
       ) : (
         <Swipeable
           ref={swipeRef}
@@ -343,6 +355,9 @@ const styles = StyleSheet.create({
   swipeRow: {
     marginBottom: 12,
   },
+  webCardWrap: {
+    position: 'relative',
+  },
   swipeDeleteBtn: {
     width: 80,
     justifyContent: 'center',
@@ -422,7 +437,9 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   webDeleteBtn: {
-    marginLeft: 8,
+    position: 'absolute',
+    top: 10,
+    right: 28,
     width: 28,
     height: 28,
     borderRadius: 14,
