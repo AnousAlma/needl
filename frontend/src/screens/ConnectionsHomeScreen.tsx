@@ -1,7 +1,7 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { Plus, Settings, Star, Trash2 } from 'lucide-react-native';
+import { Heart, Plus, Settings, Star, Trash2 } from 'lucide-react-native';
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import {
   Alert,
@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { isDataApiReady } from '../api/atlasDataApi';
 import { canBrowseWithDriver, getConnectionMongoUri } from '../api/driverApi';
 import { useAuth } from '../contexts/AuthContext';
+import { useSupportDonateModal } from '../contexts/SupportDonateModalContext';
 import type { StoredConnection } from '../storage/connectionStorage';
 import { colorHexForTag } from '../theme/atlasConnectionUi';
 import { useConnectionStore } from '../store/connectionStore';
@@ -172,6 +173,7 @@ function ConnectionRow({
 export function ConnectionsHomeScreen() {
   const { colors, typography: typo, monoFontFamily } = useTheme();
   const { user } = useAuth();
+  const { openSupportDonate } = useSupportDonateModal();
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const connections = useConnectionStore((s) => s.connections);
@@ -181,6 +183,11 @@ export function ConnectionsHomeScreen() {
     void Haptics.selectionAsync();
     navigation.navigate('Settings');
   }, [navigation]);
+
+  const openSupport = useCallback(() => {
+    void Haptics.selectionAsync();
+    openSupportDonate();
+  }, [openSupportDonate]);
 
   const openAdd = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -231,6 +238,23 @@ export function ConnectionsHomeScreen() {
           />
         )}
       />
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Support Needl"
+        onPress={openSupport}
+        style={({ pressed }) => [
+          styles.fabSupport,
+          {
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            opacity: pressed ? 0.9 : 1,
+            bottom: 24 + insets.bottom,
+          },
+        ]}
+      >
+        <Heart color={colors.primary} size={26} strokeWidth={2.2} />
+      </Pressable>
 
       <Pressable
         accessibilityRole="button"
@@ -312,6 +336,21 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     marginTop: 4,
+  },
+  fabSupport: {
+    position: 'absolute',
+    left: 24,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
   },
   fab: {
     position: 'absolute',

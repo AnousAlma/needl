@@ -20,13 +20,16 @@ import {
   fieldTypeGlyph,
   inferFieldValueKind,
   parseEditableString,
+  compactExpandedNeedsWideScrollRow,
   sortedDocumentKeys,
+  stringFieldKeysFromDoc,
   validateNewFieldName,
   valueToEditableString,
 } from '../utils/documentEditValue';
 import * as Haptics from 'expo-haptics';
 import { Plus, Trash2 } from 'lucide-react-native';
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { LayoutChangeEvent } from 'react-native';
 import {
   ActivityIndicator,
   Alert,
@@ -57,6 +60,39 @@ function idEqual(a: unknown, b: unknown): boolean {
   } catch {
     return false;
   }
+}
+
+/** Horizontal scroll only when nested editor is wider than the row (no fixed oversize pane). */
+function CompactRowHorizontalScrollIfNeeded({ children }: { children: ReactNode }) {
+  const [viewportW, setViewportW] = useState(0);
+  const [contentW, setContentW] = useState(0);
+  const canScroll = viewportW > 0 && contentW > viewportW + 4;
+
+  return (
+    <ScrollView
+      horizontal
+      nestedScrollEnabled
+      keyboardShouldPersistTaps="handled"
+      showsHorizontalScrollIndicator={canScroll}
+      scrollEnabled={canScroll}
+      style={styles.compactRowHScroll}
+      contentContainerStyle={styles.compactRowHScrollContent}
+      onLayout={(e: LayoutChangeEvent) => {
+        const w = e.nativeEvent.layout.width;
+        setViewportW((prev) => (Math.abs(prev - w) > 1 ? w : prev));
+      }}
+    >
+      <View
+        style={styles.compactRowWidePane}
+        onLayout={(e: LayoutChangeEvent) => {
+          const w = e.nativeEvent.layout.width;
+          setContentW((prev) => (Math.abs(prev - w) > 1 ? w : prev));
+        }}
+      >
+        {children}
+      </View>
+    </ScrollView>
+  );
 }
 
 function parseInitialDocument(
@@ -105,6 +141,9 @@ export function DocumentEditScreen({ navigation, route }: Props) {
     }
     return o;
   });
+  const [stringFieldKeys, setStringFieldKeys] = useState<Record<string, boolean>>(() =>
+    initial.ok ? stringFieldKeysFromDoc(initial.doc) : {},
+  );
   const [jsonText, setJsonText] = useState(() =>
     initial.ok ? JSON.stringify(initial.doc, null, 2) : '',
   );
@@ -121,8 +160,9 @@ export function DocumentEditScreen({ navigation, route }: Props) {
       fieldTexts,
       sortedDocumentKeys(fieldTexts as Record<string, unknown>),
       originalIdRef.current,
+      stringFieldKeys,
     );
-  }, [fieldTexts]);
+  }, [fieldTexts, stringFieldKeys]);
 
   const applyParsedDocToState = useCallback((doc: Record<string, unknown>) => {
     const next: Record<string, string> = {};
@@ -130,6 +170,7 @@ export function DocumentEditScreen({ navigation, route }: Props) {
       next[k] = valueToEditableString(doc[k]);
     }
     setFieldTexts(next);
+    setStringFieldKeys(stringFieldKeysFromDoc(doc));
     setJsonText(JSON.stringify(doc, null, 2));
   }, []);
 
@@ -165,7 +206,7 @@ export function DocumentEditScreen({ navigation, route }: Props) {
   }, [connectionId]);
 
   const flushStructuredToJson = useCallback((): boolean => {
-    const built = buildDocumentFromFieldTexts(fieldTexts, keysOrder, originalIdRef.current);
+    const built = buildDocumentFromFieldTexts(fieldTexts, keysOrder, originalIdRef.current, stringFieldKeys);
     if (!built.ok) {
       setError(built.message);
       return false;
@@ -173,7 +214,7 @@ export function DocumentEditScreen({ navigation, route }: Props) {
     setError(null);
     setJsonText(JSON.stringify(built.doc, null, 2));
     return true;
-  }, [fieldTexts, keysOrder]);
+  }, [fieldTexts, keysOrder, stringFieldKeys]);
 
   const flushJsonToStructured = useCallback((): boolean => {
     let parsed: unknown;
@@ -197,6 +238,7 @@ export function DocumentEditScreen({ navigation, route }: Props) {
       next[k] = valueToEditableString(doc[k]);
     }
     setFieldTexts(next);
+    setStringFieldKeys(stringFieldKeysFromDoc(doc));
     setError(null);
     return true;
   }, [jsonText]);
@@ -234,8 +276,8 @@ export function DocumentEditScreen({ navigation, route }: Props) {
       }
       return { ok: true, doc };
     }
-    return buildDocumentFromFieldTexts(fieldTexts, keysOrder, originalIdRef.current);
-  }, [editMode, fieldTexts, jsonText, keysOrder]);
+    return buildDocumentFromFieldTexts(fieldTexts, keysOrder, originalIdRef.current, stringFieldKeys);
+  }, [editMode, fieldTexts, jsonText, keysOrder, stringFieldKeys]);
 
   const performDeleteDocument = useCallback(async () => {
     const id = originalIdRef.current;
@@ -440,6 +482,11 @@ export function DocumentEditScreen({ navigation, route }: Props) {
           delete next[key];
           return next;
         });
+        setStringFieldKeys((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
       }
       setError(null);
     },
@@ -492,6 +539,9 @@ export function DocumentEditScreen({ navigation, route }: Props) {
         } else {
           const text = valueToEditableString(defaultValueForKind(kind));
           setFieldTexts((prev) => ({ ...prev, [nm]: text }));
+          if (kind === 'string') {
+            setStringFieldKeys((prev) => ({ ...prev, [nm]: true }));
+          }
         }
         setKindModal(null);
         setError(null);
@@ -505,6 +555,10 @@ export function DocumentEditScreen({ navigation, route }: Props) {
           setError(r.message);
           return;
         }
+        const nextSk: Record<string, boolean> = { ...stringFieldKeys };
+        if (kind === 'string') nextSk[k] = true;
+        else delete nextSk[k];
+        setStringFieldKeys(nextSk);
         setFieldTexts((prev) => {
           const next = { ...prev, [k]: r.text };
           if (editMode === 'json') {
@@ -512,6 +566,7 @@ export function DocumentEditScreen({ navigation, route }: Props) {
               next,
               sortedDocumentKeys(next as Record<string, unknown>),
               originalIdRef.current,
+              nextSk,
             );
             if (built.ok) {
               setJsonText(JSON.stringify(built.doc, null, 2));
@@ -523,7 +578,7 @@ export function DocumentEditScreen({ navigation, route }: Props) {
         setError(null);
       }
     },
-    [applyParsedDocToState, editMode, fieldTexts, jsonText, kindModal],
+    [applyParsedDocToState, editMode, fieldTexts, jsonText, kindModal, stringFieldKeys],
   );
 
   if (!initial.ok) {
@@ -657,8 +712,13 @@ export function DocumentEditScreen({ navigation, route }: Props) {
           <View style={[styles.compactCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
             {keysOrder.map((key) => {
               const readOnly = key === '_id';
-              return (
-                <View key={key} style={[styles.compactRow, { borderBottomColor: colors.border }]}>
+              const parsedField = parseEditableString(
+                fieldTexts[key] ?? '',
+                stringFieldKeys[key] ? { asString: true } : undefined,
+              );
+              const scrollWholeRowWide = compactExpandedNeedsWideScrollRow(parsedField);
+              const rowBody = (
+                <>
                   <View style={styles.compactRowHeader}>
                     <Text style={[styles.fieldName, { color: colors.text }]} numberOfLines={1}>
                       {key}
@@ -670,13 +730,13 @@ export function DocumentEditScreen({ navigation, route }: Props) {
                           onPress={() => setKindModal({ mode: 'type', key })}
                           hitSlop={6}
                           style={[styles.miniAct, { borderColor: colors.border }]}
-                          accessibilityLabel={`Change type (${fieldTypeGlyph(fieldTexts[key] ?? '')}) for ${key}`}
+                          accessibilityLabel={`Change type (${fieldTypeGlyph(fieldTexts[key] ?? '', stringFieldKeys[key])}) for ${key}`}
                         >
                           <Text
                             style={[styles.typeGlyph, { color: colors.primary, fontFamily: monoFontFamily }]}
                             numberOfLines={1}
                           >
-                            {fieldTypeGlyph(fieldTexts[key] ?? '')}
+                            {fieldTypeGlyph(fieldTexts[key] ?? '', stringFieldKeys[key])}
                           </Text>
                         </Pressable>
                         <Pressable
@@ -690,9 +750,11 @@ export function DocumentEditScreen({ navigation, route }: Props) {
                       </View>
                     ) : null}
                   </View>
-                  <View style={styles.compactValueWrap}>
+                  <View
+                    style={scrollWholeRowWide ? styles.compactValueWrapInWideRow : styles.compactValueWrap}
+                  >
                     <CompactValueEditor
-                      value={parseEditableString(fieldTexts[key] ?? '')}
+                      value={parsedField}
                       readOnly={readOnly}
                       onChange={(next) => {
                         if (readOnly) return;
@@ -702,6 +764,15 @@ export function DocumentEditScreen({ navigation, route }: Props) {
                       monoFontFamily={monoFontFamily}
                     />
                   </View>
+                </>
+              );
+              return (
+                <View key={key} style={[styles.compactRow, { borderBottomColor: colors.border }]}>
+                  {scrollWholeRowWide ? (
+                    <CompactRowHorizontalScrollIfNeeded>{rowBody}</CompactRowHorizontalScrollIfNeeded>
+                  ) : (
+                    rowBody
+                  )}
                 </View>
               );
             })}
@@ -729,13 +800,13 @@ export function DocumentEditScreen({ navigation, route }: Props) {
                         <Pressable
                           onPress={() => setKindModal({ mode: 'type', key: k })}
                           hitSlop={4}
-                          accessibilityLabel={`Change type (${fieldTypeGlyph(fieldTexts[k] ?? '')}) for ${k}`}
+                          accessibilityLabel={`Change type (${fieldTypeGlyph(fieldTexts[k] ?? '', stringFieldKeys[k])}) for ${k}`}
                         >
                           <Text
                             style={[styles.typeGlyphTable, { color: colors.primary, fontFamily: monoFontFamily }]}
                             numberOfLines={1}
                           >
-                            {fieldTypeGlyph(fieldTexts[k] ?? '')}
+                            {fieldTypeGlyph(fieldTexts[k] ?? '', stringFieldKeys[k])}
                           </Text>
                         </Pressable>
                         <Pressable onPress={() => confirmDeleteField(k)} hitSlop={4} accessibilityLabel={`Delete ${k}`}>
@@ -790,7 +861,12 @@ export function DocumentEditScreen({ navigation, route }: Props) {
         fieldKey={kindModal?.mode === 'type' ? kindModal.key : undefined}
         suggestedKind={
           kindModal?.mode === 'type'
-            ? inferFieldValueKind(parseEditableString(fieldTexts[kindModal.key] ?? ''))
+            ? inferFieldValueKind(
+                parseEditableString(
+                  fieldTexts[kindModal.key] ?? '',
+                  stringFieldKeys[kindModal.key] ? { asString: true } : undefined,
+                ),
+              )
             : undefined
         }
         onClose={() => setKindModal(null)}
@@ -872,6 +948,8 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
+    width: '100%',
+    maxWidth: '100%',
   },
   jsonInput: {
     minHeight: 420,
@@ -885,6 +963,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+    width: '100%',
+    alignSelf: 'stretch',
   },
   compactRow: {
     flexDirection: 'column',
@@ -909,6 +989,22 @@ const styles = StyleSheet.create({
   compactValueWrap: {
     alignSelf: 'stretch',
     width: '100%',
+  },
+  /** Shrink-to-content width so short nested docs do not force horizontal scroll. */
+  compactValueWrapInWideRow: {
+    alignSelf: 'flex-start',
+  },
+  compactRowHScroll: {
+    alignSelf: 'stretch',
+    maxWidth: '100%',
+  },
+  compactRowHScrollContent: {
+    paddingRight: 8,
+  },
+  compactRowWidePane: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 10,
   },
   hScroll: {
     marginHorizontal: -16,

@@ -5,6 +5,7 @@ import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import type { ThemeColors } from '../theme/colors';
 import {
   compactObjectIdFieldDisplayFromText,
+  inferFieldValueKind,
   parseEditableString,
   shouldExpandCompactValue,
   sortedDocumentKeys,
@@ -81,7 +82,7 @@ function ObjectPropertyRow({
         editable={!readOnly}
         autoCapitalize="none"
         autoCorrect={false}
-        placeholder="key"
+        placeholder="Field name"
         placeholderTextColor={colors.textMuted}
         style={[
           styles.objectKeyInput,
@@ -122,26 +123,32 @@ function AddNestedRowButton({
   indent: number;
 }) {
   return (
-    <Pressable
-      onPress={() => {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        onPress();
-      }}
-      style={({ pressed }) => [
-        styles.addRowBtn,
-        {
-          borderColor: colors.border,
-          backgroundColor: colors.inputSurface,
-          marginLeft: indent,
-          opacity: pressed ? 0.85 : 1,
-        },
-      ]}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <Plus size={16} color={colors.primary} strokeWidth={2.5} />
-      <Text style={[styles.addRowLabel, { color: colors.primary, fontFamily: monoFontFamily }]}>{label}</Text>
-    </Pressable>
+    <View style={[styles.addRowOuter, { paddingLeft: indent }]}>
+      <Pressable
+        onPress={() => {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onPress();
+        }}
+        style={({ pressed }) => [
+          styles.addRowBtn,
+          {
+            borderColor: colors.border,
+            backgroundColor: colors.inputSurface,
+            opacity: pressed ? 0.85 : 1,
+          },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+      >
+        <Plus size={16} color={colors.primary} strokeWidth={2.5} />
+        <Text
+          style={[styles.addRowLabel, { color: colors.primary, fontFamily: monoFontFamily }]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -169,13 +176,14 @@ export function CompactValueEditor({
 }: Props) {
   if (readOnly || !shouldExpandCompactValue(value)) {
     const text = scalarDisplayText(value, readOnly);
+    const editAsString = inferFieldValueKind(value) === 'string';
     return (
       <TextInput
         value={text}
         editable={!readOnly}
         onChangeText={(t) => {
           try {
-            onChange(parseEditableString(t));
+            onChange(parseEditableString(t, editAsString ? { asString: true } : undefined));
           } catch {
             /* keep previous — parseEditableString rarely throws */
           }
@@ -210,7 +218,7 @@ export function CompactValueEditor({
           </View>
           {!readOnly ? (
             <AddNestedRowButton
-              label="Add array element"
+              label="Add item"
               colors={colors}
               monoFontFamily={monoFontFamily}
               indent={0}
@@ -220,7 +228,7 @@ export function CompactValueEditor({
         </View>
       );
     }
-    return (
+    const arrayBody = (
       <View style={styles.nestedBlock}>
         {arr.map((item, i) => (
           <View
@@ -237,8 +245,7 @@ export function CompactValueEditor({
               style={[styles.arrayIndex, { color: colors.textMuted, fontFamily: monoFontFamily }]}
               accessibilityLabel={`Index ${i}`}
             >
-              {i}
-              <Text style={{ color: colors.syntaxPunctuation }}>:</Text>
+              [{i}]
             </Text>
             <View style={styles.arrayValueWrap}>
               <CompactValueEditor
@@ -258,7 +265,7 @@ export function CompactValueEditor({
         ))}
         {!readOnly ? (
           <AddNestedRowButton
-            label="Add array element"
+            label="Add item"
             colors={colors}
             monoFontFamily={monoFontFamily}
             indent={rowPad}
@@ -267,6 +274,7 @@ export function CompactValueEditor({
         ) : null}
       </View>
     );
+    return arrayBody;
   }
 
   const obj = value as Record<string, unknown>;
@@ -310,7 +318,7 @@ export function CompactValueEditor({
     onChange({ ...obj, [key]: nextVal });
   };
 
-  return (
+  const objectBody = (
     <View style={styles.nestedBlock}>
       {keys.map((k) => (
         <ObjectPropertyRow
@@ -340,6 +348,7 @@ export function CompactValueEditor({
       ) : null}
     </View>
   );
+  return objectBody;
 }
 
 const styles = StyleSheet.create({
@@ -352,30 +361,30 @@ const styles = StyleSheet.create({
   },
   nestedBlock: {
     alignSelf: 'stretch',
-    width: '100%',
     gap: 12,
+    alignItems: 'flex-start',
   },
   arrayRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
-    alignSelf: 'stretch',
-    width: '100%',
+    alignItems: 'flex-start',
+    alignSelf: 'flex-start',
     gap: 10,
     borderLeftWidth: 2,
     paddingLeft: 10,
     marginLeft: 0,
   },
   arrayIndex: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    width: 40,
-    minWidth: 40,
+    width: 44,
+    minWidth: 44,
     paddingTop: 12,
     textAlign: 'right',
   },
   arrayValueWrap: {
-    flex: 1,
-    minWidth: 0,
+    minWidth: 160,
+    maxWidth: 720,
+    flexShrink: 1,
     alignSelf: 'stretch',
   },
   objectRow: {
@@ -383,15 +392,16 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 8,
     flexWrap: 'nowrap',
-    alignSelf: 'stretch',
-    width: '100%',
+    alignSelf: 'flex-start',
+    paddingBottom: 4,
   },
   objectKeyInput: {
-    fontSize: 13,
-    width: 112,
-    minWidth: 72,
-    maxWidth: 140,
+    width: 168,
+    minWidth: 120,
+    maxWidth: 220,
     flexShrink: 0,
+    fontSize: 13,
+    minHeight: 44,
   },
   colon: {
     fontSize: 14,
@@ -400,18 +410,18 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   objectValueWrap: {
-    flex: 1,
-    minWidth: 0,
+    minWidth: 160,
+    maxWidth: 720,
+    flexShrink: 1,
     alignSelf: 'stretch',
   },
   emptyArrayBox: {
     paddingVertical: 10,
     paddingHorizontal: 10,
-    alignSelf: 'stretch',
+    alignSelf: 'flex-start',
   },
   emptyWithActions: {
-    alignSelf: 'stretch',
-    width: '100%',
+    alignSelf: 'flex-start',
     gap: 10,
   },
   emptyHint: {
@@ -419,17 +429,24 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontStyle: 'italic',
   },
+  addRowOuter: {
+    alignSelf: 'flex-start',
+    minWidth: 200,
+  },
   addRowBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
+    flexShrink: 0,
     gap: 8,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
   },
   addRowLabel: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: 13,
     fontWeight: '700',
   },

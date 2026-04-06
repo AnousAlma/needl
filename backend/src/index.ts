@@ -6,6 +6,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 import { verifyIdToken } from './firebaseAdmin.js';
+import { handleCreateDonationSession, handleStripeWebhook, isStripeDonateConfigured } from './stripeDonate.js';
 import {
   createDatabaseWithCollection,
   createMongoCollection,
@@ -24,7 +25,10 @@ dotenv.config();
 const app = express();
 const port = Number(process.env.PORT) || 3001;
 
-app.use(express.json({ limit: '1mb' }));
+/** Stripe webhooks need the raw body for signature verification (must run before express.json). */
+app.post('/v1/stripe/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  void handleStripeWebhook(req, res);
+});
 
 const corsOrigins = process.env.CORS_ORIGINS?.split(',').map((s) => s.trim()).filter(Boolean);
 app.use(
@@ -32,6 +36,8 @@ app.use(
     origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
   }),
 );
+
+app.use(express.json({ limit: '1mb' }));
 
 async function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
   const h = req.headers.authorization;
@@ -52,6 +58,15 @@ async function authMiddleware(req: express.Request, res: express.Response, next:
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'needl-driver-api' });
+});
+
+app.get('/v1/stripe/donate-status', (_req, res) => {
+  res.json({ enabled: isStripeDonateConfigured() });
+});
+
+app.post('/v1/stripe/create-donation-session', authMiddleware, (req, res) => {
+  const uid = (req as express.Request & { needlUid?: string }).needlUid ?? '';
+  void handleCreateDonationSession(uid, req.body, res);
 });
 
 app.get('/v1/me', authMiddleware, (req, res) => {

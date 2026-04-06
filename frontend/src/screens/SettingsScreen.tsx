@@ -1,10 +1,11 @@
 import * as Haptics from 'expo-haptics';
-import { AlignLeft, BookOpen } from 'lucide-react-native';
+import { AlignLeft, BookOpen, Heart } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { DocumentCompassFieldList } from '../components/DocumentCompassFieldList';
 import { DocumentCompassTable } from '../components/DocumentCompassTable';
 import { useAuth } from '../contexts/AuthContext';
+import { useSupportDonateModal } from '../contexts/SupportDonateModalContext';
 import {
   useSettingsStore,
   type CustomSortDirection,
@@ -46,6 +47,7 @@ const SORTS: { key: DocumentSortPreset; label: string; hint?: string }[] = [
 ];
 
 export function SettingsScreen() {
+  const { openSupportDonate } = useSupportDonateModal();
   const { colors, typography: typo, monoFontFamily } = useTheme();
   const { user, logOut } = useAuth();
   const documentViewMode = useSettingsStore((s) => s.documentViewMode);
@@ -96,6 +98,29 @@ export function SettingsScreen() {
         ]}
       >
         <Text style={[typo.subtitle, { color: colors.danger }]}>Sign out</Text>
+      </Pressable>
+
+      <Pressable
+        onPress={() => {
+          void Haptics.selectionAsync();
+          openSupportDonate();
+        }}
+        style={({ pressed }) => [
+          styles.supportRow,
+          {
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            opacity: pressed ? 0.92 : 1,
+          },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel="Support Needl"
+      >
+        <Heart size={22} color={colors.primary} style={styles.supportRowIcon} />
+        <View style={styles.supportRowText}>
+          <Text style={[typo.subtitle, { color: colors.text }]}>Support Needl</Text>
+          <Text style={[typo.caption, { color: colors.textMuted }]}>Tips & Stripe Checkout</Text>
+        </View>
       </Pressable>
 
       <Text style={[styles.sectionTitle, { color: colors.text }]}>Display Configuration</Text>
@@ -346,6 +371,23 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 2,
     marginBottom: 8,
+  },
+  supportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: 8,
+  },
+  supportRowIcon: {
+    marginTop: 2,
+  },
+  supportRowText: {
+    flex: 1,
+    minWidth: 0,
   },
   sectionTitle: {
     fontSize: 22,

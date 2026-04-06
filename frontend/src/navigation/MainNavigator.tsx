@@ -11,6 +11,7 @@ import { AddConnectionScreen } from '../screens/AddConnectionScreen';
 import { DatabasesScreen } from '../screens/DatabasesScreen';
 import { DocumentEditScreen } from '../screens/DocumentEditScreen';
 import { DocumentExplorerScreen } from '../screens/DocumentExplorerScreen';
+import { SupportDonateModalProvider } from '../contexts/SupportDonateModalContext';
 import { SettingsScreen } from '../screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -26,55 +27,57 @@ export function MainNavigator() {
   }, [hydrateConnections, hydrateSettings]);
 
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.background },
-        headerShadowVisible: false,
-        headerTintColor: colors.text,
-        headerTitleStyle: { color: colors.text, fontWeight: '700', fontSize: 20 },
-        contentStyle: { backgroundColor: colors.background },
-        ...(Platform.OS === 'ios'
-          ? {
-              scrollEdgeEffects: {
-                top: 'hidden' as const,
-                bottom: 'hidden' as const,
-                left: 'hidden' as const,
-                right: 'hidden' as const,
-              },
-            }
-          : {}),
-      }}
-    >
-      <Stack.Screen
-        name="ConnectionsHome"
-        component={ConnectionsHomeScreen}
-        options={{
-          headerTitle: () => (
-            <NeedlHomeHeaderTitle textColor={colors.text} markBackgroundColor={colors.background} />
-          ),
+    <SupportDonateModalProvider>
+      <Stack.Navigator
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.background },
+          headerShadowVisible: false,
+          headerTintColor: colors.text,
+          headerTitleStyle: { color: colors.text, fontWeight: '700', fontSize: 20 },
+          contentStyle: { backgroundColor: colors.background },
+          ...(Platform.OS === 'ios'
+            ? {
+                scrollEdgeEffects: {
+                  top: 'hidden' as const,
+                  bottom: 'hidden' as const,
+                  left: 'hidden' as const,
+                  right: 'hidden' as const,
+                },
+              }
+            : {}),
         }}
-      />
-      <Stack.Screen
-        name="AddConnection"
-        component={AddConnectionScreen}
-        options={{ title: 'Add Connection', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen
-        name="Databases"
-        component={DatabasesScreen}
-        options={{ title: 'Database navigator' }}
-      />
-      <Stack.Screen
-        name="DocumentExplorer"
-        component={DocumentExplorerScreen}
-        options={{ title: 'Documents' }}
-      />
-      <Stack.Screen
-        name="DocumentEdit"
-        component={DocumentEditScreen}
-        options={{ title: 'Edit document', headerBackTitle: 'Back' }}
-      />
-      <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
-    </Stack.Navigator>
+      >
+        <Stack.Screen
+          name="ConnectionsHome"
+          component={ConnectionsHomeScreen}
+          options={{
+            headerTitle: () => (
+              <NeedlHomeHeaderTitle textColor={colors.text} markBackgroundColor={colors.background} />
+            ),
+          }}
+        />
+        <Stack.Screen
+          name="AddConnection"
+          component={AddConnectionScreen}
+          options={{ title: 'Add Connection', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="Databases"
+          component={DatabasesScreen}
+          options={{ title: 'Database navigator' }}
+        />
+        <Stack.Screen
+          name="DocumentExplorer"
+          component={DocumentExplorerScreen}
+          options={{ title: 'Documents' }}
+        />
+        <Stack.Screen
+          name="DocumentEdit"
+          component={DocumentEditScreen}
+          options={{ title: 'Edit document', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+      </Stack.Navigator>
+    </SupportDonateModalProvider>
   );
 }

@@ -116,10 +116,19 @@ export function convertFieldTextToKind(
   }
 }
 
+/** Top-level keys whose compact/table cell text is a literal string (not JSON / number coercion). */
+export function stringFieldKeysFromDoc(doc: Record<string, unknown>): Record<string, boolean> {
+  const o: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(doc)) {
+    if (typeof v === 'string') o[k] = true;
+  }
+  return o;
+}
+
 /** Short symbol for the type chip (compact / table); tap still opens type picker. */
-export function fieldTypeGlyph(rawText: string): string {
+export function fieldTypeGlyph(rawText: string, treatAsStringField?: boolean): string {
   try {
-    const v = parseEditableString(rawText);
+    const v = parseEditableString(rawText, treatAsStringField ? { asString: true } : undefined);
     if (v === null) return 'null';
     if (Array.isArray(v)) return '[]';
     if (typeof v === 'object') {
@@ -128,7 +137,7 @@ export function fieldTypeGlyph(rawText: string): string {
       if ('$date' in o) return 'Dt';
       return '{}';
     }
-    if (typeof v === 'boolean') return v ? 'true' : 'false';
+    if (typeof v === 'boolean') return 'bool';
     if (typeof v === 'number') return '#';
     if (typeof v === 'string') return '""';
     return '?';
@@ -164,7 +173,11 @@ export function uniqueNestedObjectKey(existingKeys: string[], base = 'newField')
 
 export function valueToEditableString(value: unknown): string {
   if (value === undefined) return '';
-  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'string') {
+    if (value === '') return '';
+    /** Raw text in editors — JSON.stringify would add quotes and cause escape snowball on each keystroke. */
+    return value;
+  }
   if (value === null) return 'null';
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   try {
@@ -174,7 +187,16 @@ export function valueToEditableString(value: unknown): string {
   }
 }
 
-export function parseEditableString(raw: string): unknown {
+export type ParseEditableStringOptions = {
+  /** Field is string type: keep raw text (no JSON.parse / number coercion). */
+  asString?: boolean;
+};
+
+export function parseEditableString(raw: string, opts?: ParseEditableStringOptions): unknown {
+  if (opts?.asString) {
+    if (raw === '') return '';
+    return raw;
+  }
   const t = raw.trim();
   if (t === '') return '';
   try {
@@ -221,10 +243,18 @@ export function shouldExpandCompactValue(v: unknown): boolean {
   return false;
 }
 
+/** Horizontal wide-row scroll only when array/object has entries (empty [] / {} stay screen-width). */
+export function compactExpandedNeedsWideScrollRow(v: unknown): boolean {
+  if (!shouldExpandCompactValue(v)) return false;
+  if (Array.isArray(v)) return v.length > 0;
+  return Object.keys(v as Record<string, unknown>).length > 0;
+}
+
 export function buildDocumentFromFieldTexts(
   fieldTexts: Record<string, string>,
   keys: string[],
   originalId: unknown,
+  stringFieldKeys?: Record<string, boolean>,
 ): { ok: true; doc: Record<string, unknown> } | { ok: false; message: string } {
   const out: Record<string, unknown> = {};
   for (const k of keys) {
@@ -234,7 +264,8 @@ export function buildDocumentFromFieldTexts(
     }
     const raw = fieldTexts[k] ?? '';
     try {
-      out[k] = parseEditableString(raw);
+      const asString = stringFieldKeys?.[k] === true;
+      out[k] = parseEditableString(raw, asString ? { asString: true } : undefined);
     } catch {
       return { ok: false, message: `Invalid value for field "${k}"` };
     }
