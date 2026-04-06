@@ -34,6 +34,7 @@ export function MainNavigator() {
           headerShadowVisible: false,
           headerTintColor: colors.text,
           headerTitleStyle: { color: colors.text, fontWeight: '700', fontSize: 20 },
+          headerBackButtonDisplayMode: 'minimal',
           contentStyle: { backgroundColor: colors.background },
           ...(Platform.OS === 'ios'
             ? {

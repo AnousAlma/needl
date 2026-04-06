@@ -100,29 +100,6 @@ export function SettingsScreen() {
         <Text style={[typo.subtitle, { color: colors.danger }]}>Sign out</Text>
       </Pressable>
 
-      <Pressable
-        onPress={() => {
-          void Haptics.selectionAsync();
-          openSupportDonate();
-        }}
-        style={({ pressed }) => [
-          styles.supportRow,
-          {
-            borderColor: colors.border,
-            backgroundColor: colors.surface,
-            opacity: pressed ? 0.92 : 1,
-          },
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel="Support Needl"
-      >
-        <Heart size={22} color={colors.primary} style={styles.supportRowIcon} />
-        <View style={styles.supportRowText}>
-          <Text style={[typo.subtitle, { color: colors.text }]}>Support Needl</Text>
-          <Text style={[typo.caption, { color: colors.textMuted }]}>Tips & Stripe Checkout</Text>
-        </View>
-      </Pressable>
-
       <Text style={[styles.sectionTitle, { color: colors.text }]}>Display Configuration</Text>
       <Text style={[typo.body, { color: colors.textMuted, marginBottom: 20 }]}>
         Tailor how Needl presents your cluster data and query results.

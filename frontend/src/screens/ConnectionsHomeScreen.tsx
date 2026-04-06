@@ -7,6 +7,7 @@ import {
   Alert,
   Animated,
   FlatList,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -47,6 +48,7 @@ function ConnectionRow({
   onNavigate,
   onRemove,
 }: ConnectionRowProps) {
+  const isWeb = Platform.OS === 'web';
   const swipeRef = useRef<Swipeable>(null);
   const browseReady = isDataApiReady(item) || canBrowseWithDriver(item, Boolean(user));
   const uri = getConnectionMongoUri(item);
@@ -98,74 +100,99 @@ function ConnectionRow({
     </Pressable>
   );
 
+  const card = (
+    <Pressable
+      onPress={() => {
+        void Haptics.selectionAsync();
+        onNavigate();
+      }}
+      style={({ pressed }) => [
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          borderRightColor: colors.cardAccent,
+          opacity: pressed ? 0.92 : 1,
+        },
+      ]}
+    >
+      {colorHexForTag(item.colorTag) ? (
+        <View style={[styles.colorBar, { backgroundColor: colorHexForTag(item.colorTag)! }]} />
+      ) : (
+        <View style={styles.colorBarPlaceholder} />
+      )}
+
+      <View style={styles.cardBody}>
+        <View style={styles.titleRow}>
+          {item.favorite ? (
+            <Star size={16} color={colors.primary} fill={colors.primary} style={{ marginRight: 6 }} />
+          ) : null}
+          <Text style={[typo.subtitle, { color: colors.text, flex: 1, fontWeight: '700' }]} numberOfLines={1}>
+            {item.name}
+          </Text>
+          {isWeb ? (
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                askRemove();
+              }}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${item.name}`}
+              style={({ pressed }) => [
+                styles.webDeleteBtn,
+                { borderColor: colors.border, opacity: pressed ? 0.75 : 1 },
+              ]}
+            >
+              <Trash2 size={16} color={colors.danger} />
+            </Pressable>
+          ) : null}
+        </View>
+        {uriLine ? (
+          <Text
+            style={[
+              styles.uriText,
+              {
+                fontFamily: monoFontFamily,
+                color: browseReady ? '#6BA3FF' : colors.textMuted,
+                textDecorationLine: browseReady ? 'underline' : 'none',
+              },
+            ]}
+            numberOfLines={2}
+          >
+            {uriLine}
+          </Text>
+        ) : !browseReady ? (
+          <Text style={[typo.caption, { color: colors.textMuted, marginTop: 4 }]}>
+            Sign in or finish connection setup to browse
+          </Text>
+        ) : null}
+      </View>
+
+      <View
+        style={[
+          styles.statusDot,
+          { backgroundColor: browseReady ? colors.primary : '#6B7280' },
+        ]}
+      />
+    </Pressable>
+  );
+
   return (
     <View style={styles.swipeRow}>
-      <Swipeable
-        ref={swipeRef}
-        renderRightActions={renderRightActions}
-        overshootRight={false}
-        friction={2}
-        rightThreshold={48}
-      >
-        <Pressable
-          onPress={() => {
-            void Haptics.selectionAsync();
-            onNavigate();
-          }}
-          style={({ pressed }) => [
-            styles.card,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRightColor: colors.cardAccent,
-              opacity: pressed ? 0.92 : 1,
-            },
-          ]}
+      {isWeb ? (
+        card
+      ) : (
+        <Swipeable
+          ref={swipeRef}
+          renderRightActions={renderRightActions}
+          overshootRight={false}
+          friction={2}
+          rightThreshold={48}
         >
-          {colorHexForTag(item.colorTag) ? (
-            <View style={[styles.colorBar, { backgroundColor: colorHexForTag(item.colorTag)! }]} />
-          ) : (
-            <View style={styles.colorBarPlaceholder} />
-          )}
-
-          <View style={styles.cardBody}>
-            <View style={styles.titleRow}>
-              {item.favorite ? (
-                <Star size={16} color={colors.primary} fill={colors.primary} style={{ marginRight: 6 }} />
-              ) : null}
-              <Text style={[typo.subtitle, { color: colors.text, flex: 1, fontWeight: '700' }]} numberOfLines={1}>
-                {item.name}
-              </Text>
-            </View>
-            {uriLine ? (
-              <Text
-                style={[
-                  styles.uriText,
-                  {
-                    fontFamily: monoFontFamily,
-                    color: browseReady ? '#6BA3FF' : colors.textMuted,
-                    textDecorationLine: browseReady ? 'underline' : 'none',
-                  },
-                ]}
-                numberOfLines={2}
-              >
-                {uriLine}
-              </Text>
-            ) : !browseReady ? (
-              <Text style={[typo.caption, { color: colors.textMuted, marginTop: 4 }]}>
-                Sign in or finish connection setup to browse
-              </Text>
-            ) : null}
-          </View>
-
-          <View
-            style={[
-              styles.statusDot,
-              { backgroundColor: browseReady ? colors.primary : '#6B7280' },
-            ]}
-          />
-        </Pressable>
-      </Swipeable>
+          {card}
+        </Swipeable>
+      )}
     </View>
   );
 }
@@ -176,6 +203,7 @@ export function ConnectionsHomeScreen() {
   const { openSupportDonate } = useSupportDonateModal();
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
+  const fabBottom = Platform.OS === 'web' ? 32 : 24 + insets.bottom;
   const connections = useConnectionStore((s) => s.connections);
   const removeConnection = useConnectionStore((s) => s.removeConnection);
 
@@ -195,18 +223,45 @@ export function ConnectionsHomeScreen() {
   }, [navigation]);
 
   useLayoutEffect(() => {
+    const WEB_ACTION_SLOT = 48;
     navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity
-          onPress={openSettings}
-          hitSlop={12}
-          style={{ marginRight: 5, paddingLeft: 3, transform: [{ translateX: 2 }] }}
-          accessibilityRole="button"
-          accessibilityLabel="Settings"
-        >
-          <Settings color={colors.text} size={24} />
-        </TouchableOpacity>
-      ),
+      headerTitleAlign: 'center',
+      ...(Platform.OS === 'web'
+        ? {
+            // Keep title centered on web by balancing equal left/right action slots.
+            headerLeft: () => <View style={{ width: WEB_ACTION_SLOT }} />,
+          }
+        : {}),
+      headerRight: () =>
+        Platform.OS === 'web' ? (
+          <Pressable
+            onPress={openSettings}
+            hitSlop={12}
+            style={({ pressed }) => ({
+              width: WEB_ACTION_SLOT,
+              height: 36,
+              marginRight: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'transparent',
+              opacity: pressed ? 0.7 : 1,
+            })}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+          >
+            <Settings color={colors.text} size={24} />
+          </Pressable>
+        ) : (
+          <TouchableOpacity
+            onPress={openSettings}
+            hitSlop={12}
+            style={{ marginRight: 5, paddingLeft: 3, transform: [{ translateX: 3 }] }}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+          >
+            <Settings color={colors.text} size={24} />
+          </TouchableOpacity>
+        ),
     });
   }, [navigation, openSettings, colors.text]);
 
@@ -249,7 +304,7 @@ export function ConnectionsHomeScreen() {
             borderColor: colors.border,
             backgroundColor: colors.surface,
             opacity: pressed ? 0.9 : 1,
-            bottom: 24 + insets.bottom,
+            bottom: fabBottom,
           },
         ]}
       >
@@ -265,7 +320,7 @@ export function ConnectionsHomeScreen() {
           {
             backgroundColor: colors.primary,
             opacity: pressed ? 0.9 : 1,
-            bottom: 24 + insets.bottom,
+            bottom: fabBottom,
           },
         ]}
       >
@@ -346,11 +401,11 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
+    elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
   },
   fab: {
     position: 'absolute',
@@ -365,5 +420,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
+  },
+  webDeleteBtn: {
+    marginLeft: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
