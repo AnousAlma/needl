@@ -49,7 +49,7 @@ export function DocumentCompassTable({
             <Text style={[mono, { color: colors.textMuted }]} />
           </View>
           {keys.map((k) => (
-            <View key={k} style={[styles.colHead, { minWidth: COL_MIN, borderRightColor: colors.border }]}>
+            <View key={k} style={[styles.colHead, { width: COL_MIN, borderRightColor: colors.border }]}>
               <Text style={[mono, { color: colors.text, fontWeight: '600' }]} numberOfLines={1}>
                 {k}
               </Text>
@@ -73,7 +73,7 @@ export function DocumentCompassTable({
                     : undefined;
                 const { text, kind } = formatBsonCellText(raw, 48, k);
                 return (
-                  <View key={k} style={[styles.cell, { minWidth: COL_MIN, borderRightColor: colors.border }]}>
+                  <View key={k} style={[styles.cell, { width: COL_MIN, borderRightColor: colors.border }]}>
                     <Text style={[mono, { color: colorForBsonKind(kind, colors) }]} numberOfLines={3}>
                       {text}
                     </Text>
