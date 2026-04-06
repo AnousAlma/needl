@@ -785,7 +785,7 @@ export function DocumentEditScreen({ navigation, route }: Props) {
                   <Text style={{ fontFamily: monoFontFamily, fontSize: 12, color: colors.textMuted }} />
                 </View>
                 {keysOrder.map((k) => (
-                  <View key={k} style={[styles.colHead, { minWidth: COL_MIN, borderRightColor: colors.border }]}>
+                  <View key={k} style={[styles.colHead, { width: COL_MIN, borderRightColor: colors.border }]}>
                     <Text
                       style={[typo.caption, { fontFamily: monoFontFamily, color: colors.text, fontWeight: '600' }]}
                       numberOfLines={1}
@@ -824,7 +824,7 @@ export function DocumentEditScreen({ navigation, route }: Props) {
                 {keysOrder.map((k) => {
                   const readOnly = k === '_id';
                   return (
-                    <View key={k} style={[styles.cell, { minWidth: COL_MIN, borderRightColor: colors.border }]}>
+                    <View key={k} style={[styles.cell, { width: COL_MIN, borderRightColor: colors.border }]}>
                       <TextInput
                         value={
                           readOnly
