@@ -284,6 +284,7 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const loadMoreInFlight = useRef(false);
+  const knownSearchKeysRef = useRef<string[]>([]);
 
   const mongoUri = getConnectionMongoUri(connection);
   const useDriver = canBrowseWithDriver(connection, Boolean(user));
@@ -314,14 +315,14 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
     }
     const term = filterText.trim();
     if (!term) return mergeBaseAndClauses({}, builderClauses);
-    const keys = unionDocumentKeys(documents).filter((k) => k !== '_id');
+    const keys = knownSearchKeysRef.current.filter((k) => k !== '_id');
     if (keys.length === 0) return mergeBaseAndClauses({}, builderClauses);
     const escaped = escapeRegexLiteral(term);
     const regexAnyKnownField: Record<string, unknown> = {
       $or: keys.map((k) => ({ [k]: { $regex: escaped, $options: 'i' } })),
     };
     return mergeBaseAndClauses(regexAnyKnownField, builderClauses);
-  }, [parsedTextFilter, filterText, builderClauses, documents]);
+  }, [parsedTextFilter, filterText, builderClauses]);
 
   useLayoutEffect(() => {
     void (async () => {
@@ -421,9 +422,13 @@ export function DocumentExplorerScreen({ navigation, route }: Props) {
 
       setError(null);
       setDocuments(result.docs);
+      const nextKnownKeys = unionDocumentKeys(result.docs).filter((k) => k !== '_id');
+      if (nextKnownKeys.length > 0) {
+        knownSearchKeysRef.current = nextKnownKeys;
+      }
       setHasMore(result.docs.length === pageSize);
     },
-    [filterText, builderClauses, fetchDocumentsPage, pageSize, documents],
+    [filterText, builderClauses, fetchDocumentsPage, pageSize],
   );
 
   const loadMore = useCallback(async () => {
