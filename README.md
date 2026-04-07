@@ -40,24 +40,53 @@ If you like MongoDB Compass but wish there was a phone-native experience, Needl 
 
 ## Demo & Media
 
-Use this section as your polished showcase.
-
 ### App Screenshots
 
-```md
-![Home](docs/media/screenshots/home.png)
-![Collection Explorer](docs/media/screenshots/collections.png)
-![Document Explorer](docs/media/screenshots/documents.png)
-![Document Edit](docs/media/screenshots/documents-edit.png)
-```
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/media/screenshots/home.png" alt="Home — connections" width="220" loading="lazy" /><br />
+      <sub><b>Home</b> — saved connections</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/media/screenshots/collections.png" alt="Collection explorer" width="220" loading="lazy" /><br />
+      <sub><b>Collections</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/media/screenshots/documents.png" alt="Document explorer" width="220" loading="lazy" /><br />
+      <sub><b>Documents</b></sub>
+    </td>
+    <td align="center">
+      <img src="docs/media/screenshots/documents-edit.png" alt="Document edit" width="220" loading="lazy" /><br />
+      <sub><b>Edit</b></sub>
+    </td>
+  </tr>
+</table>
 
 ### GIFs / Short Demos
 
-```md
-![Query Demo](docs/media/demos/query-demo.gif)
-![Edit Demo](docs/media/demos/edit-demo.gif)
-![Add Demo](docs/media/demos/add-demo.gif)
-```
+<details>
+<summary><b>Query</b> — short demo</summary>
+<p align="center">
+  <img src="docs/media/demos/query-demo.gif" alt="Query demo" width="240" loading="lazy" />
+</p>
+</details>
+
+<details>
+<summary><b>Edit</b> — short demo</summary>
+<p align="center">
+  <img src="docs/media/demos/edit-demo.gif" alt="Edit demo" width="240" loading="lazy" />
+</p>
+</details>
+
+<details>
+<summary><b>Add</b> — short demo</summary>
+<p align="center">
+  <img src="docs/media/demos/add-demo.gif" alt="Add demo" width="240" loading="lazy" />
+</p>
+</details>
 
 <!-- ### Video Walkthrough
 
