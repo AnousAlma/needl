@@ -66,6 +66,10 @@ export function SupportDonateModal({ visible, onClose }: Props) {
       }
       WebBrowser.maybeCompleteAuthSession();
       setDonateOpening(true);
+      const webPopup =
+        Platform.OS === 'web' && typeof window !== 'undefined'
+          ? window.open('', '_blank', 'noopener,noreferrer')
+          : null;
       try {
         const token = await user.getIdToken();
         const successUrl = Linking.createURL('donate/success');
@@ -77,8 +81,13 @@ export function SupportDonateModal({ visible, onClose }: Props) {
         });
         if (Platform.OS === 'web') {
           if (typeof window !== 'undefined') {
-            window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
-            Alert.alert('Checkout', 'Complete payment in the new tab. Thanks for supporting Needl.');
+            if (webPopup && !webPopup.closed) {
+              webPopup.location.href = checkoutUrl;
+              webPopup.focus();
+            } else {
+              // Popup likely blocked; fall back to same-tab redirect.
+              window.location.assign(checkoutUrl);
+            }
           } else {
             await Linking.openURL(checkoutUrl);
           }
@@ -89,6 +98,9 @@ export function SupportDonateModal({ visible, onClose }: Props) {
           }
         }
       } catch (e) {
+        if (webPopup && !webPopup.closed) {
+          webPopup.close();
+        }
         const msg =
           e instanceof DriverApiError ? e.message : e instanceof Error ? e.message : 'Something went wrong';
         Alert.alert('Donation', msg);
