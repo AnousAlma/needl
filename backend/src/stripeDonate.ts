@@ -35,7 +35,6 @@ export function isAllowedDonateRedirectUrl(url: string): boolean {
     return allow.some((prefix) => url.startsWith(prefix));
   }
   if (u.protocol === 'https:') return true;
-  if (u.protocol === 'http:') return true;
   if (u.protocol === 'exp:') return true;
   if (u.protocol === 'exps:') return true;
   // Custom native schemes (needl://, etc.)
