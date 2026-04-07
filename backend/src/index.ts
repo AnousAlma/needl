@@ -56,8 +56,21 @@ async function authMiddleware(req: express.Request, res: express.Response, next:
   }
 }
 
+app.get('/', (_req, res) => {
+  res.json({
+    ok: true,
+    service: 'needl-driver-api',
+    docs: '/health',
+  });
+});
+
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'needl-driver-api' });
+  res.json({
+    ok: true,
+    service: 'needl-driver-api',
+    uptimeSec: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 app.get('/v1/stripe/donate-status', (_req, res) => {
