@@ -35,6 +35,8 @@ export function MainNavigator() {
           headerTintColor: colors.text,
           headerTitleStyle: { color: colors.text, fontWeight: '700', fontSize: 20 },
           headerBackButtonDisplayMode: 'minimal',
+          gestureEnabled: true,
+          fullScreenGestureEnabled: Platform.OS === 'ios',
           contentStyle: { backgroundColor: colors.background },
           ...(Platform.OS === 'ios'
             ? {
