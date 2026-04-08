@@ -20,6 +20,8 @@ interface ConnectionStoreState {
   connections: StoredConnection[];
   activeConnectionId: string | null;
   hydrate: () => Promise<void>;
+  /** Clear all connections and keys from device storage (e.g. after account deletion). */
+  clearAll: () => Promise<void>;
   setActiveConnectionId: (id: string | null) => void;
   addSavedConnection: (input: NewConnectionInput, apiKey: string) => Promise<StoredConnection>;
   addCompassUriConnection: (input: {
@@ -38,6 +40,11 @@ export const useConnectionStore = create<ConnectionStoreState>((set, get) => ({
   hydrate: async () => {
     const connections = await connectionStorage.getAll();
     set({ connections });
+  },
+
+  clearAll: async () => {
+    await connectionStorage.clearAll();
+    set({ connections: [], activeConnectionId: null });
   },
 
   setActiveConnectionId: (id) => set({ activeConnectionId: id }),

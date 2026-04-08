@@ -1,8 +1,12 @@
 import { auth, isFirebaseConfigured } from '../firebase/config';
-import { ensureUserDocument } from '../firebase/firestoreSync';
+import { deleteAllUserFirestoreData, ensureUserDocument } from '../firebase/firestoreSync';
+import { useConnectionStore } from '../store/connectionStore';
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
+  EmailAuthProvider,
   onAuthStateChanged,
+  reauthenticateWithCredential,
   signInWithEmailAndPassword,
   signOut,
   type User,
@@ -16,6 +20,8 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   logOut: () => Promise<void>;
+  /** Email/password accounts only: re-authenticates, removes Firestore + local data, then deletes the Auth user. */
+  deleteAccount: (password: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -60,6 +66,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signOut(auth);
   }, []);
 
+  const deleteAccount = useCallback(async (password: string) => {
+    if (!configured) {
+      throw new Error('Firebase is not configured');
+    }
+    const u = auth.currentUser;
+    if (!u?.email) {
+      throw new Error('This account cannot be deleted from the app (missing email).');
+    }
+    const cred = EmailAuthProvider.credential(u.email, password);
+    await reauthenticateWithCredential(u, cred);
+    try {
+      await deleteAllUserFirestoreData(u.uid);
+    } catch (e) {
+      if (__DEV__) {
+        console.warn('[Needl] Firestore cleanup before account delete failed (continuing)', e);
+      }
+    }
+    await useConnectionStore.getState().clearAll();
+    await deleteUser(u);
+  }, [configured]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -68,8 +95,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signUp,
       logOut,
+      deleteAccount,
     }),
-    [user, loading, configured, signIn, signUp, logOut],
+    [user, loading, configured, signIn, signUp, logOut, deleteAccount],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

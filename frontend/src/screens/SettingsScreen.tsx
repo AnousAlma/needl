@@ -1,11 +1,10 @@
 import * as Haptics from 'expo-haptics';
-import { AlignLeft, BookOpen, Heart } from 'lucide-react-native';
+import { AlignLeft, BookOpen, Trash2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { DocumentCompassFieldList } from '../components/DocumentCompassFieldList';
 import { DocumentCompassTable } from '../components/DocumentCompassTable';
 import { useAuth } from '../contexts/AuthContext';
-import { useSupportDonateModal } from '../contexts/SupportDonateModalContext';
 import {
   useSettingsStore,
   type CustomSortDirection,
@@ -46,10 +45,25 @@ const SORTS: { key: DocumentSortPreset; label: string; hint?: string }[] = [
   },
 ];
 
+function mapDeleteAccountError(e: unknown): string {
+  if (e && typeof e === 'object' && 'code' in e) {
+    const code = String((e as { code?: unknown }).code ?? '');
+    if (code === 'auth/wrong-password') return 'Incorrect password.';
+    if (code === 'auth/invalid-credential') return 'Incorrect password.';
+    if (code === 'auth/too-many-requests') return 'Too many attempts. Try again later.';
+    if (code === 'auth/requires-recent-login') return 'Please sign out, sign in again, then try deleting your account.';
+    if (code === 'auth/network-request-failed') return 'Network error. Check your connection and try again.';
+    if (code === 'permission-denied') {
+      return 'Could not remove cloud data (Firestore permission denied). Check your security rules allow users to delete their own data.';
+    }
+  }
+  if (e instanceof Error) return e.message;
+  return 'Could not delete account.';
+}
+
 export function SettingsScreen() {
-  const { openSupportDonate } = useSupportDonateModal();
   const { colors, typography: typo, monoFontFamily } = useTheme();
-  const { user, logOut } = useAuth();
+  const { user, logOut, deleteAccount } = useAuth();
   const documentViewMode = useSettingsStore((s) => s.documentViewMode);
   const setDocumentViewMode = useSettingsStore((s) => s.setDocumentViewMode);
   const pageSize = useSettingsStore((s) => s.pageSize);
@@ -62,6 +76,9 @@ export function SettingsScreen() {
   const setCustomSortDirection = useSettingsStore((s) => s.setCustomSortDirection);
 
   const [sortFieldDraft, setSortFieldDraft] = useState(customSortField);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   useEffect(() => {
     if (sortPreset === 'custom_ts') {
@@ -70,37 +87,38 @@ export function SettingsScreen() {
   }, [sortPreset, customSortField]);
 
   return (
-    <ScrollView
-      style={[styles.root, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text style={[typo.caption, { color: colors.textMuted, marginBottom: 4 }]}>Signed in as</Text>
-      <Text style={[typo.body, { color: colors.text, marginBottom: 16 }]}>{user?.email ?? '—'}</Text>
-
-      <Pressable
-        onPress={() => {
-          void Haptics.selectionAsync();
-          Alert.alert('Sign out', 'You will need to sign in again to use Needl.', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Sign out',
-              style: 'destructive',
-              onPress: () => {
-                void logOut();
-              },
-            },
-          ]);
-        }}
-        style={({ pressed }) => [
-          styles.signOut,
-          { borderColor: colors.danger, opacity: pressed ? 0.85 : 1 },
-        ]}
+    <>
+      <ScrollView
+        style={[styles.root, { backgroundColor: colors.background }]}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={[typo.subtitle, { color: colors.danger }]}>Sign out</Text>
-      </Pressable>
+        <Text style={[typo.caption, { color: colors.textMuted, marginBottom: 4 }]}>Signed in as</Text>
+        <Text style={[typo.body, { color: colors.text, marginBottom: 16 }]}>{user?.email ?? '—'}</Text>
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Display Configuration</Text>
+        <Pressable
+          onPress={() => {
+            void Haptics.selectionAsync();
+            Alert.alert('Sign out', 'You will need to sign in again to use Needl.', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Sign out',
+                style: 'destructive',
+                onPress: () => {
+                  void logOut();
+                },
+              },
+            ]);
+          }}
+          style={({ pressed }) => [
+            styles.signOut,
+            { borderColor: colors.danger, opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <Text style={[typo.subtitle, { color: colors.danger }]}>Sign out</Text>
+        </Pressable>
+
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Display Configuration</Text>
       <Text style={[typo.body, { color: colors.textMuted, marginBottom: 20 }]}>
         Tailor how Needl presents your cluster data and query results.
       </Text>
@@ -329,7 +347,134 @@ export function SettingsScreen() {
           </View>
         ) : null}
       </View>
-    </ScrollView>
+
+        <View style={styles.scrollFooterSpacer} />
+
+        <View style={[styles.deleteAccountSection, { borderTopColor: colors.border }]}>
+          <Text style={[styles.deleteAccountSectionTitle, { color: colors.text }]}>Danger zone</Text>
+          <Text style={[typo.caption, { color: colors.textMuted, marginBottom: 12 }]}>
+            Permanently delete your Needl account and remove saved connections on this device.
+          </Text>
+          <Pressable
+            onPress={() => {
+              void Haptics.selectionAsync();
+              if (!user?.email) {
+                Alert.alert('Delete account', 'This account cannot be deleted from the app.');
+                return;
+              }
+              Alert.alert(
+                'Delete account',
+                'This permanently deletes your Needl account and removes saved connections on this device. This cannot be undone.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Continue',
+                    style: 'destructive',
+                    onPress: () => {
+                      setDeletePassword('');
+                      setDeleteModalOpen(true);
+                    },
+                  },
+                ],
+              );
+            }}
+            style={({ pressed }) => [
+              styles.deleteAccountBtn,
+              { borderColor: colors.danger, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <Trash2 size={20} color={colors.danger} style={styles.deleteAccountIcon} />
+            <Text style={[typo.subtitle, { color: colors.danger }]}>Delete account</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+
+      <Modal
+        visible={deleteModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!deleteBusy) setDeleteModalOpen(false);
+        }}
+      >
+        <Pressable
+          style={[styles.deleteModalBackdrop, { backgroundColor: 'rgba(0,0,0,0.55)' }]}
+          onPress={() => {
+            if (!deleteBusy) setDeleteModalOpen(false);
+          }}
+        >
+          <View
+            onStartShouldSetResponder={() => true}
+            style={[styles.deleteModalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <Text style={[typo.subtitle, { color: colors.text, marginBottom: 8 }]}>Confirm password</Text>
+            <Text style={[typo.caption, { color: colors.textMuted, marginBottom: 12 }]}>
+              Enter your account password to permanently delete your account.
+            </Text>
+            <TextInput
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              placeholder="Password"
+              placeholderTextColor={colors.textMuted}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!deleteBusy}
+              style={[
+                styles.deleteModalInput,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.inputSurface,
+                  fontFamily: monoFontFamily,
+                },
+              ]}
+            />
+            <View style={styles.deleteModalActions}>
+              <Pressable
+                disabled={deleteBusy}
+                onPress={() => {
+                  if (!deleteBusy) setDeleteModalOpen(false);
+                }}
+                style={({ pressed }) => [styles.deleteModalSecondary, { opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={[typo.subtitle, { color: colors.textMuted }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                disabled={deleteBusy || deletePassword.length === 0}
+                onPress={() => {
+                  void (async () => {
+                    setDeleteBusy(true);
+                    try {
+                      await deleteAccount(deletePassword);
+                      setDeleteModalOpen(false);
+                      setDeletePassword('');
+                    } catch (e) {
+                      Alert.alert('Delete account', mapDeleteAccountError(e));
+                    } finally {
+                      setDeleteBusy(false);
+                    }
+                  })();
+                }}
+                style={({ pressed }) => [
+                  styles.deleteModalPrimary,
+                  {
+                    borderColor: colors.danger,
+                    opacity: pressed ? 0.85 : deleteBusy || deletePassword.length === 0 ? 0.5 : 1,
+                  },
+                ]}
+              >
+                {deleteBusy ? (
+                  <ActivityIndicator color={colors.danger} />
+                ) : (
+                  <Text style={[typo.subtitle, { color: colors.danger }]}>Delete permanently</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -339,7 +484,12 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 48,
+    paddingBottom: 56,
+    flexGrow: 1,
+  },
+  scrollFooterSpacer: {
+    flexGrow: 1,
+    minHeight: 16,
   },
   signOut: {
     alignSelf: 'flex-start',
@@ -348,6 +498,69 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 2,
     marginBottom: 8,
+  },
+  deleteAccountSection: {
+    marginTop: 28,
+    paddingTop: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  deleteAccountSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  deleteAccountBtn: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 2,
+  },
+  deleteAccountIcon: {
+    marginTop: 1,
+  },
+  deleteModalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  deleteModalCard: {
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 20,
+    maxWidth: 400,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  deleteModalInput: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 15,
+    marginBottom: 16,
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 16,
+  },
+  deleteModalSecondary: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  deleteModalPrimary: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 2,
+    minWidth: 140,
+    alignItems: 'center',
   },
   supportRow: {
     flexDirection: 'row',

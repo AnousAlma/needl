@@ -1,4 +1,13 @@
-import { deleteDoc, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  serverTimestamp,
+  setDoc,
+  writeBatch,
+} from 'firebase/firestore';
 import type { StoredConnection } from '../storage/connectionStorage';
 import { db } from './config';
 
@@ -38,4 +47,24 @@ export async function ensureUserDocument(uid: string, email: string | null): Pro
     },
     { merge: true },
   );
+}
+
+const FIRESTORE_BATCH_LIMIT = 500;
+
+/**
+ * Deletes all Firestore data for this user: `users/{uid}/connections/*` then `users/{uid}`.
+ * Call while authenticated as this user (after re-auth if required).
+ */
+export async function deleteAllUserFirestoreData(uid: string): Promise<void> {
+  const connectionsCol = collection(db, 'users', uid, 'connections');
+  const snapshot = await getDocs(connectionsCol);
+  const docs = snapshot.docs;
+  for (let i = 0; i < docs.length; i += FIRESTORE_BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    for (const d of docs.slice(i, i + FIRESTORE_BATCH_LIMIT)) {
+      batch.delete(d.ref);
+    }
+    await batch.commit();
+  }
+  await deleteDoc(doc(db, 'users', uid));
 }

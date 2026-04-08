@@ -253,4 +253,14 @@ export const connectionStorage = {
   async updateApiKey(id: string, apiKey: string): Promise<void> {
     await secureSetItem(secureApiKeyKey(id), apiKey);
   },
+
+  /** Remove all saved connections and secure API keys (e.g. after account deletion). */
+  async clearAll(): Promise<void> {
+    const all = await readConnections();
+    await writeConnections([]);
+    for (const c of all) {
+      await secureDeleteItem(secureApiKeyKey(c.id));
+      await secureDeleteItem(legacyPasswordKey(c.id));
+    }
+  },
 };
