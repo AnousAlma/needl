@@ -24,9 +24,54 @@ function normalizeFilterId(id: unknown): unknown {
   return id;
 }
 
+/**
+ * Validates a MongoDB connection URI to prevent SSRF attacks.
+ * Only `mongodb://` and `mongodb+srv://` schemes are permitted, and
+ * hostnames that resolve to private / loopback / link-local IP ranges
+ * in the URI are rejected.
+ */
+export function validateMongoUri(uri: string): void {
+  if (!/^mongodb(?:\+srv)?:\/\//i.test(uri)) {
+    throw new Error('Invalid MongoDB URI: must start with mongodb:// or mongodb+srv://');
+  }
+
+  // Extract host(s) from the URI for a simple pattern check.
+  // Full DNS resolution is not done here; we block the most obvious literals.
+  let hostsPart: string;
+  try {
+    // Strip the scheme so URL can parse it (URL requires a valid scheme)
+    const withHttpScheme = uri.replace(/^mongodb(\+srv)?:\/\//i, 'http://');
+    const parsed = new URL(withHttpScheme);
+    hostsPart = parsed.hostname;
+  } catch {
+    throw new Error('Invalid MongoDB URI format');
+  }
+
+  // Block obviously private / loopback / metadata hostnames
+  const BLOCKED = [
+    /^localhost$/i,
+    /^127\.\d+\.\d+\.\d+$/,
+    /^0\.0\.0\.0$/,
+    /^::1$/,
+    /^10\.\d+\.\d+\.\d+$/,
+    /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/,
+    /^192\.168\.\d+\.\d+$/,
+    /^169\.254\.\d+\.\d+$/,        // link-local / AWS metadata
+    /^fd[0-9a-f]{2}:/i,            // IPv6 unique-local
+    /^fe80:/i,                     // IPv6 link-local
+  ];
+
+  for (const pattern of BLOCKED) {
+    if (pattern.test(hostsPart)) {
+      throw new Error(`MongoDB URI host is not allowed: ${hostsPart}`);
+    }
+  }
+}
+
 const SERVER_MS = 25_000;
 
 export async function withMongoClient<T>(uri: string, fn: (client: MongoClient) => Promise<T>): Promise<T> {
+  validateMongoUri(uri);
   const client = new MongoClient(uri, {
     serverSelectionTimeoutMS: SERVER_MS,
     connectTimeoutMS: SERVER_MS,
@@ -110,7 +155,8 @@ export async function findDocuments(
     if (options.sort && Object.keys(options.sort).length > 0) {
       cursor = cursor.sort(options.sort);
     }
-    cursor = cursor.skip(options.skip ?? 0).limit(Math.min(options.limit ?? 20, 200));
+    const MAX_SKIP = 100_000;
+    cursor = cursor.skip(Math.min(options.skip ?? 0, MAX_SKIP)).limit(Math.min(options.limit ?? 20, 200));
     return cursor.toArray();
   });
 }
