@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { ThemeColors } from '../theme/colors';
 import {
-  compactObjectIdFieldDisplayFromText,
   inferFieldValueKind,
   parseEditableString,
   shouldExpandCompactValue,
@@ -23,11 +22,64 @@ type Props = {
   depth?: number;
 };
 
-function scalarDisplayText(v: unknown, readOnly: boolean): string {
-  const raw = valueToEditableString(v);
-  if (readOnly) {
-    return compactObjectIdFieldDisplayFromText(raw) ?? raw;
+function isBsonScalarObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const keys = Object.keys(value);
+  if (keys.length !== 1) return false;
+  const k = keys[0]!;
+  return (
+    k === '$oid' ||
+    k === '$date' ||
+    k === '$numberInt' ||
+    k === '$numberLong' ||
+    k === '$numberDouble'
+  );
+}
+
+function bsonScalarToShellText(v: unknown): string | null {
+  if (typeof v === 'string' && /^[a-f\d]{24}$/i.test(v)) {
+    return `ObjectId("${v}")`;
   }
+  if (!isBsonScalarObject(v)) return null;
+  if (typeof v.$oid === 'string') return `ObjectId("${v.$oid}")`;
+  if (typeof v.$date === 'string') return `ISODate("${v.$date}")`;
+  if (typeof v.$date === 'number' && Number.isFinite(v.$date)) return `Date(${v.$date})`;
+  if (typeof v.$numberInt === 'string') return `NumberInt("${v.$numberInt}")`;
+  if (typeof v.$numberLong === 'string') return `NumberLong("${v.$numberLong}")`;
+  if (typeof v.$numberDouble === 'string') return `NumberDouble("${v.$numberDouble}")`;
+  return null;
+}
+
+function parseShellBsonScalar(raw: string): { matched: true; value: unknown } | { matched: false } {
+  const t = raw.trim();
+  if (!t) return { matched: false };
+
+  const objectIdMatch = t.match(/^ObjectId\(\s*["']([^"']+)["']\s*\)$/i);
+  if (objectIdMatch) return { matched: true, value: { $oid: objectIdMatch[1] } };
+
+  const isoDateMatch = t.match(/^ISODate\(\s*["']([^"']+)["']\s*\)$/i);
+  if (isoDateMatch) return { matched: true, value: { $date: isoDateMatch[1] } };
+
+  const epochDateMatch = t.match(/^Date\(\s*(-?\d+)\s*\)$/i);
+  if (epochDateMatch) return { matched: true, value: { $date: Number(epochDateMatch[1]) } };
+
+  const intMatch = t.match(/^NumberInt\(\s*["'](-?\d+)["']\s*\)$/i);
+  if (intMatch) return { matched: true, value: { $numberInt: intMatch[1] } };
+
+  const longMatch = t.match(/^NumberLong\(\s*["'](-?\d+)["']\s*\)$/i);
+  if (longMatch) return { matched: true, value: { $numberLong: longMatch[1] } };
+
+  const doubleMatch = t.match(/^NumberDouble\(\s*["'](-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)["']\s*\)$/i);
+  if (doubleMatch) return { matched: true, value: { $numberDouble: doubleMatch[1] } };
+
+  return { matched: false };
+}
+
+function scalarDisplayText(v: unknown, readOnly: boolean): string {
+  const bsonShell = bsonScalarToShellText(v);
+  if (bsonShell) return bsonShell;
+  const raw = valueToEditableString(v);
+  if (readOnly) return raw;
   return raw;
 }
 
@@ -177,12 +229,20 @@ export function CompactValueEditor({
   if (readOnly || !shouldExpandCompactValue(value)) {
     const text = scalarDisplayText(value, readOnly);
     const editAsString = inferFieldValueKind(value) === 'string';
+    const preferShellBsonParsing = isBsonScalarObject(value);
     return (
       <TextInput
         value={text}
         editable={!readOnly}
         onChangeText={(t) => {
           try {
+            if (preferShellBsonParsing) {
+              const parsedShell = parseShellBsonScalar(t);
+              if (parsedShell.matched) {
+                onChange(parsedShell.value);
+                return;
+              }
+            }
             onChange(parseEditableString(t, editAsString ? { asString: true } : undefined));
           } catch {
             /* keep previous — parseEditableString rarely throws */

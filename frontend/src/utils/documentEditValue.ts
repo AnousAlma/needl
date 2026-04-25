@@ -26,13 +26,23 @@ export function compactObjectIdFieldDisplayFromText(rawFieldText: string): strin
   return null;
 }
 
-export type FieldValueKind = 'string' | 'number' | 'boolean' | 'null' | 'object' | 'array';
+export type FieldValueKind =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'null'
+  | 'objectId'
+  | 'date'
+  | 'object'
+  | 'array';
 
 export const FIELD_KIND_OPTIONS: { id: FieldValueKind; label: string }[] = [
   { id: 'string', label: 'String' },
   { id: 'number', label: 'Number' },
   { id: 'boolean', label: 'Boolean' },
   { id: 'null', label: 'Null' },
+  { id: 'objectId', label: 'ObjectId' },
+  { id: 'date', label: 'Date' },
   { id: 'object', label: 'Object' },
   { id: 'array', label: 'Array' },
 ];
@@ -47,6 +57,10 @@ export function defaultValueForKind(kind: FieldValueKind): unknown {
       return false;
     case 'null':
       return null;
+    case 'objectId':
+      return { $oid: '000000000000000000000000' };
+    case 'date':
+      return { $date: new Date().toISOString() };
     case 'object':
       return {};
     case 'array':
@@ -76,6 +90,33 @@ function valueAsKind(v: unknown, kind: FieldValueKind): unknown {
     }
     case 'null':
       return null;
+    case 'objectId': {
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const o = v as Record<string, unknown>;
+        if (typeof o.$oid === 'string') return { $oid: o.$oid };
+      }
+      const s = String(v ?? '').trim();
+      if (!s) return { $oid: '000000000000000000000000' };
+      const m = s.match(/^ObjectId\(\s*["']([^"']+)["']\s*\)$/i);
+      if (m) return { $oid: m[1] };
+      return { $oid: s };
+    }
+    case 'date': {
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const o = v as Record<string, unknown>;
+        if (typeof o.$date === 'string' || typeof o.$date === 'number') {
+          return { $date: o.$date };
+        }
+      }
+      const s = String(v ?? '').trim();
+      if (!s) return { $date: new Date().toISOString() };
+      const iso = s.match(/^ISODate\(\s*["']([^"']+)["']\s*\)$/i);
+      if (iso) return { $date: iso[1] };
+      const epoch = s.match(/^Date\(\s*(-?\d+)\s*\)$/i);
+      if (epoch) return { $date: Number(epoch[1]) };
+      if (/^-?\d+$/.test(s)) return { $date: Number(s) };
+      return { $date: s };
+    }
     case 'object':
       if (v !== null && typeof v === 'object' && !Array.isArray(v)) return { ...(v as Record<string, unknown>) };
       if (typeof v === 'string') {
@@ -149,7 +190,12 @@ export function fieldTypeGlyph(rawText: string, treatAsStringField?: boolean): s
 export function inferFieldValueKind(v: unknown): FieldValueKind {
   if (v === null) return 'null';
   if (Array.isArray(v)) return 'array';
-  if (typeof v === 'object') return 'object';
+  if (typeof v === 'object' && v !== null) {
+    const o = v as Record<string, unknown>;
+    if (typeof o.$oid === 'string') return 'objectId';
+    if (typeof o.$date === 'string' || typeof o.$date === 'number') return 'date';
+    return 'object';
+  }
   if (typeof v === 'boolean') return 'boolean';
   if (typeof v === 'number') return 'number';
   return 'string';

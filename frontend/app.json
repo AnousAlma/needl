@@ -4,6 +4,15 @@
     "slug": "needl",
     "scheme": "needl",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/6e164509-9bac-4a3a-a8f7-09710a1651f1"
+    },
     "backgroundColor": "#222421",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -18,7 +27,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "UIDesignRequiresCompatibility": true
-      }
+      },
+      "bundleIdentifier": "com.anasalmasri.needl"
     },
     "android": {
       "backgroundColor": "#222421",
@@ -36,6 +46,12 @@
     "plugins": [
       "expo-secure-store",
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6e164509-9bac-4a3a-a8f7-09710a1651f1"
+      }
+    },
+    "owner": "anousalma"
   }
 }

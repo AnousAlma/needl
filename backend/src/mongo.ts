@@ -24,6 +24,16 @@ function normalizeFilterId(id: unknown): unknown {
   return id;
 }
 
+/** Convert JSON-safe Extended JSON payloads into BSON values for driver writes. */
+function deserializeExtendedJson<T>(value: T): T {
+  return EJSON.deserialize(value as Document) as T;
+}
+
+/** Convert driver BSON values into JSON-safe Extended JSON for API responses. */
+function serializeExtendedJson<T>(value: T): T {
+  return EJSON.serialize(value as Document) as T;
+}
+
 const SERVER_MS = 25_000;
 
 export async function withMongoClient<T>(uri: string, fn: (client: MongoClient) => Promise<T>): Promise<T> {
@@ -111,7 +121,8 @@ export async function findDocuments(
       cursor = cursor.sort(options.sort);
     }
     cursor = cursor.skip(options.skip ?? 0).limit(Math.min(options.limit ?? 20, 200));
-    return cursor.toArray();
+    const docs = await cursor.toArray();
+    return serializeExtendedJson(docs) as Document[];
   });
 }
 
@@ -150,11 +161,12 @@ export async function insertOneDocument(
 ): Promise<{ document: Record<string, unknown> }> {
   return withMongoClient(uri, async (client) => {
     const col = client.db(databaseName).collection(collectionName);
-    const raw =
+    const incoming =
       document && typeof document === 'object' && !Array.isArray(document) ? { ...(document as object) } : {};
+    const raw = deserializeExtendedJson(incoming) as Document;
     const r = await col.insertOne(raw as Document);
     const withId = { ...raw, _id: r.insertedId } as Document;
-    const serialized = EJSON.serialize(withId) as Record<string, unknown>;
+    const serialized = serializeExtendedJson(withId) as Record<string, unknown>;
     return { document: serialized };
   });
 }
@@ -167,12 +179,13 @@ export async function replaceDocument(
 ): Promise<{ matchedCount: number }> {
   return withMongoClient(uri, async (client) => {
     const col = client.db(databaseName).collection(collectionName);
-    const rawId = replacement._id;
+    const replacementBson = deserializeExtendedJson(replacement) as Document;
+    const rawId = replacementBson._id;
     if (rawId === undefined) {
       throw new Error('replacement must include _id');
     }
     const id = normalizeFilterId(rawId);
-    const toStore = { ...replacement, _id: id } as Document;
+    const toStore = { ...replacementBson, _id: id } as Document;
     const r = await col.replaceOne({ _id: id as Document['_id'] }, toStore);
     return { matchedCount: r.matchedCount };
   });
