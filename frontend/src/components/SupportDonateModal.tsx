@@ -233,7 +233,8 @@ export function SupportDonateModal({ visible, onClose }: Props) {
                   Could not reach the Needl API at{' '}
                   <Text style={{ fontFamily: monoFontFamily }}>{driverApiBaseUrl()}</Text>. Start the backend, check{' '}
                   <Text style={{ fontFamily: monoFontFamily }}>EXPO_PUBLIC_DRIVER_API_URL</Text> in{' '}
-                  <Text style={{ fontFamily: monoFontFamily }}>frontend/.env</Text> (iOS Simulator:{' '}
+                  <Text style={{ fontFamily: monoFontFamily }}>frontend/.env</Text> (defaults to{' '}
+                  <Text style={{ fontFamily: monoFontFamily }}>https://needl-backend.vercel.app/</Text>; iOS Simulator:{' '}
                   <Text style={{ fontFamily: monoFontFamily }}>http://127.0.0.1:3001</Text>; physical device: your
                   computer&apos;s LAN IP, not localhost), then try again.
                 </Text>
@@ -242,8 +243,9 @@ export function SupportDonateModal({ visible, onClose }: Props) {
           ) : (
             <Text style={[typo.caption, { color: colors.textMuted }]}>
               Set <Text style={{ fontFamily: monoFontFamily }}>EXPO_PUBLIC_DRIVER_API_URL</Text> in{' '}
-              <Text style={{ fontFamily: monoFontFamily }}>frontend/.env</Text> so the app can reach your Needl API
-              for donations.
+              <Text style={{ fontFamily: monoFontFamily }}>frontend/.env</Text> to override the default{' '}
+              <Text style={{ fontFamily: monoFontFamily }}>https://needl-backend.vercel.app/</Text> endpoint used for
+              donations.
             </Text>
           )}
         </ScrollView>

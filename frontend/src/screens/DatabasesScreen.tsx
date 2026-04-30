@@ -816,8 +816,20 @@ function OpenConnectionGate({
   const uri = getConnectionMongoUri(conn ?? undefined);
   const driverOk = canBrowseWithDriver(conn, Boolean(user));
   const dataApiOk = Boolean(conn && isDataApiReady(conn));
+  const driverBackendConfigured = isDriverBackendConfigured();
 
   if (dataApiOk || driverOk) return null;
+
+  if (uri && !driverBackendConfigured) {
+    return (
+      <View style={[styles.banner, { backgroundColor: colors.surface, borderColor: colors.danger }]}>
+        <Text style={[typo.body, { color: colors.text }]}>
+          We are unable to connect right now. Please try again in a moment. If the issue continues, contact
+          anask.almasri@gmail.com and include a screenshot of this message.
+        </Text>
+      </View>
+    );
+  }
 
   if (isDriverBackendConfigured() && uri && !user) {
     return (

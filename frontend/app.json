@@ -3,10 +3,8 @@
     "name": "Needl",
     "slug": "needl",
     "scheme": "needl",
-    "version": "1.0.0",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "version": "1.0.2",
+    "runtimeVersion": "1.0.4",
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
